@@ -713,9 +713,10 @@ function ibDay(i){return "Semaine "+Math.ceil(i/5)+" · "+DAYS[(i-1)%5];}
 function ibCfg(i){
   /* tout se durcit au fil des 20 journées : nombre de messages, cadence, patience, niveau, part de WhatsApp, rafales, traduction */
   var lvls=i<=4?[1,1,1]:i<=8?[1,1,2]:i<=12?[1,2,2]:i<=16?[2,2,3]:[2,3,3];
-  return {n:8+Math.round(i*.55),gap:Math.max(2600,7200-i*240),gapMin:Math.max(1500,3900-i*115),acc:.95,
-    pat:Math.max(9500,24000-i*720),typing:Math.max(450,1100-i*30),burst:i<7?0:Math.min(.35,(i-6)*.035),
-    waShare:i<=2?.3:i<=6?.4:.5,showFr:i<=3,lvls:lvls};
+  var d=i-1;
+  return {n:7+Math.round(d*.6),gap:Math.max(2600,11000-d*440),gapMin:Math.max(1500,6000-d*235),acc:i<=5?.97:.95,
+    pat:Math.max(10000,36000-d*1370),typing:Math.max(450,1200-d*40),burst:i<7?0:Math.min(.35,(i-6)*.035),
+    waShare:i<=2?.3:i<=6?.4:.5,showFr:i<=4,lvls:lvls};
 }
 function startInbox(i){
   stopRaf();
