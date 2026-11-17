@@ -1166,6 +1166,34 @@ document.addEventListener("submit",function(e){
 document.addEventListener("change",function(e){if(e.target&&e.target.dataset&&e.target.dataset.skiporal){S.oral.callSkip=e.target.checked;save();}});
 document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay&&overlay.g)overlay.g.val=e.target.value;});
 
+
+/* geste « retour » : glisser depuis le bord gauche vers la droite */
+(function(){
+  var sx=0,sy=0,on=false,dx=0,ind=null;
+  function target(){
+    if(document.getElementById("loopstage"))return null;
+    var ib=document.getElementById("ibroot");if(ib)return null;
+    var cr=document.getElementById("callroot");if(cr&&!cr.classList.contains("done"))return null;
+    var c=[].slice.call(document.querySelectorAll(".cclose,.back,.backlink")).filter(function(e){var r=e.getBoundingClientRect();return r.width>0&&r.height>0&&!e.disabled;});
+    if(c.length)return c[0];
+    if(tab!=="home"&&!overlay)return document.querySelector('[data-tab="home"]');
+    return null;
+  }
+  document.addEventListener("touchstart",function(e){
+    var t=e.touches[0];on=false;dx=0;if(e.touches.length>1||t.clientX>28)return;
+    if(!target())return;sx=t.clientX;sy=t.clientY;on=true;
+    if(!ind){ind=document.createElement("div");ind.className="swback";ind.innerHTML="‹";document.body.appendChild(ind);}
+  },{passive:true});
+  document.addEventListener("touchmove",function(e){
+    if(!on)return;var t=e.touches[0];dx=t.clientX-sx;var dy=Math.abs(t.clientY-sy);
+    if(dy>60&&dy>dx){on=false;ind.style.opacity=0;return;}
+    var p=Math.max(0,Math.min(1,dx/110));ind.style.opacity=p;ind.style.transform="translate("+(p*46-40)+"px,-50%) scale("+(.6+p*.4)+")";ind.classList.toggle("ready",p>=1);
+  },{passive:true});
+  document.addEventListener("touchend",function(){
+    if(!on)return;on=false;if(ind){ind.style.opacity=0;ind.classList.remove("ready");}
+    if(dx>=110){var b=target();if(b){try{navigator.vibrate&&navigator.vibrate(10);}catch(x){}b.click();}}
+  },{passive:true});
+})();
 /* pas de zoom (pincement ou double tap) */
 document.addEventListener("gesturestart",function(e){e.preventDefault();},{passive:false});
 document.addEventListener("click",function(e){
