@@ -39,7 +39,7 @@ function mount(root,G,api){
 
   root.className="ibx";
   root.innerHTML=
-   '<div class="ibhud"><button class="ibq" data-ibquit="1">'+I.back+'</button><div class="ibday">'+esc(api.dayName(G.i))+'</div>'+
+   '<div class="ibhud"><button class="ibq" data-ibquit="1">'+I.back+'Quitter</button><div class="ibday">'+esc(api.dayName(G.i))+'</div>'+
      '<div class="ibhearts" id="ibh"></div><div class="ibsc"><b id="ibscore">0</b><span id="ibcombo"></span></div></div>'+
    '<div class="ibprog"><i id="ibprog"></i></div>'+
    '<div class="ibapps">'+

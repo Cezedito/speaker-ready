@@ -133,14 +133,14 @@ class LoopScene extends Phaser.Scene{
   /* ----- barre du haut ----- */
   drawTop(){
     var W=this.W,G=this.G,self=this;
-    var back=this.add.container(30,34);
-    var bb=this.add.graphics();bb.fillStyle(0xffffff,1);bb.fillCircle(0,0,19);bb.lineStyle(1.5,C.navy,.08);bb.strokeCircle(0,0,19);
-    back.add([bb,this.txt(0,-1,"‹",28,"#C2543E",{display:true})]);
-    back.setSize(44,44).setInteractive({useHandCursor:true});
+    var back=this.add.container(60,34);
+    var bb=this.add.graphics();bb.fillStyle(0xffffff,1);bb.fillRoundedRect(-44,-17,88,34,17);bb.lineStyle(1.5,C.navy,.1);bb.strokeRoundedRect(-44,-17,88,34,17);
+    back.add([bb,this.txt(0,0,"✕ Quitter",14,"#C2543E",{display:true})]);
+    back.setSize(96,44).setInteractive({useHandCursor:true});
     back.on("pointerdown",function(){self.sfx.tap();self.cleanup();self.api.quit();});
     var wname=this.api.worldName(G.w);
-    this.txt(58,22,(wname+" · NIVEAU "+G.i).toUpperCase(),11,"#6A7590",{ox:0,display:false});
-    this.scoreT=this.txt(58,42,String(G.score),22,"#00205B",{ox:0,display:true});
+    this.txt(116,22,(wname+" · NIVEAU "+G.i).toUpperCase(),11,"#6A7590",{ox:0,display:false});
+    this.scoreT=this.txt(116,42,String(G.score),22,"#00205B",{ox:0,display:true});
     this.shownScore=G.score;
     var pill=this.add.graphics();pill.fillStyle(0xffffff,1);pill.fillRoundedRect(W-112,18,96,32,16);
     this.timeT=this.txt(W-64,35,"",17,"#00205B",{display:true});

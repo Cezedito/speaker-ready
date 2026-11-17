@@ -100,7 +100,43 @@ function poolPhrases(){
 var enVoice=null,HAS_TTS="speechSynthesis" in window;
 function pickVoice(){if(!HAS_TTS)return;var vs=speechSynthesis.getVoices();enVoice=vs.find(function(v){return /en-GB/i.test(v.lang);})||vs.find(function(v){return /^en/i.test(v.lang);})||null;}
 if(HAS_TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
-function speak(t,rate){if(!HAS_TTS)return;speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang=enVoice?enVoice.lang:"en-GB";if(enVoice)u.voice=enVoice;u.rate=rate||.95;speechSynthesis.speak(u);}
+/* Voix naturelle « Heart » pré-enregistrée (dossier voices/), repli sur la synthèse du navigateur.
+   Un seul son à la fois : chaque lecture coupe la précédente. */
+var VOICE={},VPLAYER=null,VSEQ=0;
+try{fetch("voices/index.json",{cache:"no-cache"}).then(function(r){return r.ok?r.json():[];}).then(function(j){(j||[]).forEach(function(k){VOICE[k]=1;});}).catch(function(){});}catch(e){}
+function vnorm(t){return String(t).replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu,"").replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/\s+/g," ").trim().toLowerCase();}
+function vkey(t){var s=vnorm(t),h1=0x811c9dc5,h2=5381;for(var i=0;i<s.length;i++){var c=s.charCodeAt(i);h1^=c;h1=Math.imul(h1,16777619)>>>0;h2=(Math.imul(h2,33)+c)>>>0;}return h1.toString(36)+h2.toString(36);}
+function stopAudio(){VSEQ++;if(VPLAYER){try{VPLAYER.onended=null;VPLAYER.onerror=null;VPLAYER.pause();}catch(e){}}if(HAS_TTS){try{speechSynthesis.cancel();}catch(e){}}}
+function ttsSpeak(t,rate,cb){
+  if(!HAS_TTS){if(cb)setTimeout(cb,300);return;}
+  var u=new SpeechSynthesisUtterance(t);u.lang=enVoice?enVoice.lang:"en-GB";if(enVoice)u.voice=enVoice;u.rate=rate||.95;
+  if(cb)u.onend=function(){cb();};speechSynthesis.speak(u);
+}
+function speak(t,rate,cb){
+  if(!t){if(cb)cb();return;}
+  stopAudio();var my=VSEQ,k=vkey(t),done=function(){if(my===VSEQ&&cb)cb();};
+  if(VOICE[k]){
+    var a=VPLAYER||(VPLAYER=new Audio());a.preload="auto";
+    a.onended=done;a.onerror=function(){if(my===VSEQ)ttsSpeak(t,rate,done);};
+    a.src="voices/"+k+".mp3";
+    try{a.preservesPitch=true;a.webkitPreservesPitch=true;}catch(e){}
+    a.playbackRate=Math.max(.5,Math.min(1.25,(rate||.95)/.95));a.defaultPlaybackRate=a.playbackRate;
+    var p=a.play();if(p&&p.catch)p.catch(function(){if(my===VSEQ)ttsSpeak(t,rate,done);});
+  }else ttsSpeak(t,rate,done);
+}
+function speakSeq(list,rate){var i=0,next=function(){if(i<list.length)speak(list[i++],rate,function(){setTimeout(next,250);});};next();}
+/* liste de tout ce que l'appli peut lire (sert à préparer les fichiers audio) */
+window.__speechTexts=function(){
+  var out={},add=function(t){if(t&&/[a-z]/i.test(t))out[vnorm(t)]=t;};
+  WORDS.forEach(function(w){add(w.en);add(head(w.en));add(w.ex);});
+  PHRASES.forEach(function(p){add(p.en);p.en.split(" ").forEach(function(x){add(tokClean(x));});});
+  LESSONS.forEach(function(l){(l.g&&l.g.e||[]).forEach(function(e){add(e[0]);});});
+  (window.INBOX||[]).forEach(function(m){add(m[2]);add(m[4]);});
+  (window.CALLS||[]).forEach(function(c){c.turns.forEach(function(t){add(t.c[0]);t.o.forEach(function(o){add(o[0]);if(o[3])add(o[3][0]);});});["good","ok","bad"].forEach(function(k){add(c.end[k][0]);});});
+  add("Hello? Are you still there?");
+  return Object.keys(out).map(function(k){return {k:vkey(k),t:out[k]};});
+};
+function tokClean(x){return x.replace(/^[^A-Za-z0-9']+|[^A-Za-z0-9']+$/g,"");}
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 
 /* ===================== NAVIGATION ===================== */
@@ -275,7 +311,7 @@ function renderLexicon(){
   view.innerHTML='<button class="backlink" data-lext="-1">‹ Tous les thèmes</button><div class="lexhd"><span class="le">'+t.ic+'</span><div><h2 style="margin:0">'+esc(t.n)+'</h2><span class="tag">'+t.words.length+' mots · '+k+' maîtrisés · '+bankSeen(t)+' déjà vus</span></div></div>'+
     '<div class="row2"><button class="btn primary" data-scope="t:'+t.id+'" data-rview="cards">Réviser en cartes</button><button class="btn'+(on&&S.decks&&S.decks.length?" on":"")+'" data-deck="'+t.id+'">'+(S.decks&&S.decks.indexOf(t.id)>-1?"✓ Dans ma session":"Ajouter à ma session")+'</button></div>'+
     '<div class="lexlist">'+t.words.map(function(w){var kw=S.known[w.id];
-      return '<div class="lexw'+(kw?" kn":"")+'"><div class="lwt"><b>'+esc(w.en)+'</b><span>'+esc(w.fr)+'</span><i>'+esc(w.ex)+'</i></div><button class="lsay" data-say="'+esc(w.en+". "+w.ex)+'" aria-label="Écouter">'+SVG.sound+'</button></div>';}).join("")+'</div>';
+      return '<div class="lexw'+(kw?" kn":"")+'"><div class="lwt"><b>'+esc(w.en)+'</b><span>'+esc(w.fr)+'</span><i>'+esc(w.ex)+'</i></div><button class="lsay" data-sayseq="'+esc(w.en+"||"+w.ex)+'" aria-label="Écouter">'+SVG.sound+'</button></div>';}).join("")+'</div>';
 }
 function deckOn(id){return !S.decks||!S.decks.length||S.decks.indexOf(id)>-1;}
 function renderReview(){
@@ -288,7 +324,7 @@ function renderReview(){
   var w=R.deck[R.pos%R.deck.length],known=S.known[w.id];
   var face=R.flipped
     ?'<button class="flash navy flip" data-flip="1"><span class="lab">'+esc(wlabel(w))+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
-    :'<button class="card flash" data-flip="1"><span class="pill '+(known?"good":"neutral")+'">'+(known?"Maîtrisé":esc(wlabel(w)))+'</span><span class="term">'+esc(w.en)+'</span><span class="hint">Touche pour voir la traduction</span></button>';
+    :'<button class="card flash" data-flip="1"><span class="pill '+(known?"good":"neutral")+'">'+(known?"Maîtrisé":esc(wlabel(w)))+'</span><span class="term">'+esc(w.en)+'</span><span class="fhint">Touche pour voir la traduction</span></button>';
   view.innerHTML=chips+face+
     '<div class="counter">Carte '+(R.pos%R.deck.length+1)+' / '+R.deck.length+'</div>'+
     '<div class="row3"><button class="btn" data-say="'+esc(w.en)+'" aria-label="Écouter">'+SVG.sound+'</button><button class="btn" data-mark="0">À revoir</button><button class="btn primary" data-mark="1">Je connais</button></div>'+quizBtn;
@@ -455,7 +491,7 @@ function micError(e){
 }
 function recStart(){
   if(!CAN_REC){O.phase="review";render();return;}
-  if(window.speechSynthesis)speechSynthesis.cancel();
+  stopAudio();
   var go2=function(stream){
     O.stream=stream;O.chunks=[];
     var types=["audio/mp4","audio/webm;codecs=opus","audio/webm","audio/ogg"],mt=null;
@@ -496,7 +532,8 @@ function judgeHTML(){
     '<p class="jheard">Entendu : « '+esc(j.heard||"…")+' »</p>'+
     (m==="respond"?'<p class="tag" style="margin:6px 0 0">Réponse libre : le score mesure la proximité avec l’exemple, pas la justesse de ta réponse.</p>':(m==="translate"?'<p class="tag" style="margin:6px 0 0">Une autre formulation correcte peut avoir un score plus bas : fie-toi aussi à ton jugement.</p>':''))+'</div>';
 }
-function playMine(){if(!O.url)return;if(window.speechSynthesis)speechSynthesis.cancel();var a=new Audio(O.url);a.play().catch(function(){});}
+function playUrl(u){stopAudio();var a=VPLAYER||(VPLAYER=new Audio());a.onended=null;a.onerror=null;a.playbackRate=1;a.src=u;a.play().catch(function(){});}
+function playMine(){if(!O.url)return;playUrl(O.url);}
 function oralGrade(g){
   var key=oralKey(O.item),c=S.oral.srs[key]||{b:0,due:today()};
   c.b=g===2?Math.min(5,c.b+2):g===1?Math.max(1,c.b):0;c.due=addDays(g===0?1:SRS_INT[Math.max(1,c.b)]);
@@ -844,7 +881,7 @@ function renderSession(){
     view.innerHTML=sessHeader("Révision · "+(s.pos+1)+" / "+s.due.length)+
      '<p class="qhint">Ces mots reviennent aujourd’hui. Dis-toi la traduction, puis vérifie.</p>'+
      (s.flipped?'<button class="flash navy flip" data-sflip="1"><span class="lab">'+esc(wlabel(w))+' · boîte '+box+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
-       :'<button class="card flash" data-sflip="1"><span class="pill neutral">Boîte '+box+' / 5</span><span class="term">'+esc(w.en)+'</span><span class="hint">Touche pour voir la traduction</span></button>')+
+       :'<button class="card flash" data-sflip="1"><span class="pill neutral">Boîte '+box+' / 5</span><span class="term">'+esc(w.en)+'</span><span class="fhint">Touche pour voir la traduction</span></button>')+
      (s.flipped?'<div class="row2" style="margin-top:14px"><button class="btn" data-sgrade="0">Je ne savais pas</button><button class="btn primary" data-sgrade="1">Je savais ✓</button></div>'
        :'<div class="actions"><button class="btn" data-say="'+esc(w.en)+'">'+SVG.sound+' Écouter</button><button class="btn primary" data-sflip="1">Voir la réponse</button></div>');
     if(!s.flipped)speak(w.en);
@@ -916,12 +953,12 @@ function callNext(){var L=callList();for(var k=0;k<L.length;k++)if(!S.calls[L[k]
 function callStars(){var t=0;for(var k in S.calls)t+=S.calls[k];return t;}
 function satFace(v){return v>=75?"😀":v>=55?"🙂":v>=35?"😐":"😠";}
 function callRoot(){var el=document.getElementById("callroot");if(!el){el=document.createElement("div");el.id="callroot";document.body.appendChild(el);}return el;}
-function callClose(){clearInterval(window.__durT);window.__durT=null;clearInterval(callTimer);clearInterval(ringTimer);callTimer=ringTimer=null;if(window.speechSynthesis)speechSynthesis.cancel();var el=document.getElementById("callroot");if(el)el.remove();}
+function callClose(){clearInterval(window.__durT);window.__durT=null;clearInterval(callTimer);clearInterval(ringTimer);callTimer=ringTimer=null;stopAudio();var el=document.getElementById("callroot");if(el)el.remove();}
 function speakThen(text,cb,rate){
   var done=false,fin=function(){if(done)return;done=true;cb&&cb();};
   var est=900+text.split(/\s+/).length*330/(rate||.95);
-  if(window.speechSynthesis&&HAS_TTS){try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.lang=enVoice?enVoice.lang:"en-GB";if(enVoice)u.voice=enVoice;u.rate=rate||.95;u.onend=function(){setTimeout(fin,250);};speechSynthesis.speak(u);}catch(e){}}
-  setTimeout(fin,est+1500);
+  speak(text,rate,function(){setTimeout(fin,250);});
+  setTimeout(fin,est+2500);
 }
 function startCall(k){
   callClose();var sc=callList()[k];
@@ -960,7 +997,7 @@ function callRecStart(entry){
     rec.start();C.recAt=Date.now();
     C.recTo=setTimeout(function(){if(rec.state==="recording")rec.stop();},12000);
   };
-  if(window.speechSynthesis)speechSynthesis.cancel();
+  stopAudio();
   if(O.stream&&O.stream.active)go2(O.stream);
   else navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(go2,function(e){entry.micErr=micError(e);callReact();});
 }
@@ -1039,7 +1076,7 @@ function renderCall(){
   if(C.phase==="done"){
     root.className="callscr done";
     var res=C.hung?"Appel raccroché":C.stars>=3?"Appel parfait, "+esc(NAME)+" !":C.stars===2?"Bon appel":C.stars===1?"Appel moyen":"Client mécontent";
-    root.innerHTML='<div class="cdone"><div class="cav sm" style="background:'+sc.col+'">'+sc.av+'</div><div class="ctitle">'+res+'</div>'+
+    root.innerHTML='<button class="cclose" data-callsmap="1">‹ Appels</button><div class="cdone"><div class="cav sm" style="background:'+sc.col+'">'+sc.av+'</div><div class="ctitle">'+res+'</div>'+
       '<div class="cstars">'+[1,2,3].map(function(k){return '<span class="'+(k<=C.stars?"on":"")+'">★</span>';}).join("")+'</div>'+
       '<div class="lstats"><div><b>'+satFace(C.sat)+' '+C.sat+'%</b><span>satisfaction</span></div><div><b>'+fmtDur(C.dur)+'</b><span>durée</span></div><div><b>+'+C.coins+'</b><span>pièces</span></div></div>'+
       (C.endLine?'<p class="cend">« '+esc(C.endLine[0])+' »<br><i>'+esc(C.endLine[1])+'</i></p>':'')+
@@ -1128,12 +1165,15 @@ document.addEventListener("submit",function(e){
 document.addEventListener("change",function(e){if(e.target&&e.target.dataset&&e.target.dataset.skiporal){S.oral.callSkip=e.target.checked;save();}});
 document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay&&overlay.g)overlay.g.val=e.target.value;});
 
+/* pas de zoom (pincement ou double tap) */
+document.addEventListener("gesturestart",function(e){e.preventDefault();},{passive:false});
 document.addEventListener("click",function(e){
   var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
   if(el.form&&el.type==="submit")return;
   if(d.settings!==undefined)return go(function(){settingsOpen=d.settings==="1";});
   if(d.tab)return go(function(){settingsOpen=false;stopTimer();stopRaf();callClose();overlay=null;loopMap=false;inboxMap=false;callsMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
   if(d.say!==undefined){speak(d.say);return;}
+  if(d.sayseq!==undefined){speakSeq(d.sayseq.split("||"));return;}
   if(d.open!==undefined){if(!d.open)return;return go(function(){overlay=null;tab="lessons";route.lesson=+d.open;quarterSel=BYW[+d.open].q;});}
   if(d.back)return go(function(){route.lesson=null;});
   if(d.quarter)return go(function(){quarterSel=+d.quarter;});
@@ -1157,12 +1197,12 @@ document.addEventListener("click",function(e){
   if(d.cpick!==undefined){callPick(+d.cpick);return;}
   if(d.cdone){callRecStop(false);return;}
   if(d.cskip){callRecStop(true);return;}
-  if(d.chang){if(window.speechSynthesis)speechSynthesis.cancel();callFinish(true);return;}
+  if(d.chang){stopAudio();callFinish(true);return;}
   if(d.ccc){overlay.C.cc=!overlay.C.cc;render();return;}
   if(d.cfr){overlay.C.fr=!overlay.C.fr;render();return;}
   if(d.cgoal){overlay.C.goalOpen=!overlay.C.goalOpen;render();return;}
   if(d.cmute){S.oral.callSkip=!S.oral.callSkip;save();render();return;}
-  if(d.cplay!==undefined){var en=overlay.C.log[+d.cplay];if(en&&en.url){if(window.speechSynthesis)speechSynthesis.cancel();new Audio(en.url).play().catch(function(){});}return;}
+  if(d.cplay!==undefined){var en=overlay.C.log[+d.cplay];if(en&&en.url){playUrl(en.url);}return;}
   /* congress loop */
   if(d.loopmap)return go(function(){stopRaf();overlay=null;tab="games";inboxMap=false;loopMap=true;});
   if(d.loopback)return go(function(){loopMap=false;});
@@ -1205,7 +1245,7 @@ document.addEventListener("click",function(e){
   if(d.game)return go(function(){tab=tab==="home"?"games":tab==="games"?"games":tab;startGame(d.game);});
   if(d.mc!==undefined){memoryTap(+d.mc);return;}
   if(d.tf!==undefined){chronoAnswer(+d.tf);return;}
-  if(d.tok!==undefined){var g1=overlay.g;g1.built.push(+d.tok);speak(g1.bank[+d.tok].t,1);render();return;}
+  if(d.tok!==undefined){var g1=overlay.g;g1.built.push(+d.tok);speak(tokClean(g1.bank[+d.tok].t),1);render();return;}
   if(d.unb!==undefined){overlay.g.built.splice(+d.unb,1);render();return;}
   if(d.scheck){var g2=overlay.g,p=g2.list[g2.pos],ans=g2.built.map(function(k){return g2.bank[k].t;}).join(" ");var ok=ans===p.en;if(ok)g2.score++;g2.checked=ok?"ok":"ko";speak(p.en);render();return;}
   if(d.snext){var g3=overlay.g;if(g3.pos<g3.list.length-1)return go(function(){g3.pos++;scrambleSetup();});return go(function(){g3.done=true;gameRecord("scramble",g3.score,true);});}
