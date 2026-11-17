@@ -622,7 +622,8 @@ function buzz(p){try{if(navigator.vibrate)navigator.vibrate(p);}catch(e){}}
 
 /* pont entre l'appli et la scène Phaser (loop-phaser.js) */
 var loopGame=null;
-function stopRaf(){if(loopGame){try{loopGame.destroy(true);}catch(e){}loopGame=null;}var st=document.getElementById("loopstage");if(st)st.remove();}
+var ibUI=null;
+function stopRaf(){if(ibUI){try{ibUI.destroy();}catch(e){}ibUI=null;}var ibr=document.getElementById("ibroot");if(ibr)ibr.remove();if(loopGame){try{loopGame.destroy(true);}catch(e){}loopGame=null;}var st=document.getElementById("loopstage");if(st)st.remove();}
 var loopApi={
   name:function(){return NAME;},
   speak:function(w,r){var audio=overlay&&overlay.G&&overlay.G.c.mode==="audio";if(!S.loop.mute||audio)speak(head(w.en),r||1);},
@@ -710,15 +711,19 @@ function ibCurrent(){for(var i=1;i<=INBOX_N;i++)if(!ibStars(i))return i;return I
 function ibTotal(){var t=0;for(var k in S.inbox.lv)t+=S.inbox.lv[k];return t;}
 function ibDay(i){return "Semaine "+Math.ceil(i/5)+" · "+DAYS[(i-1)%5];}
 function ibCfg(i){
-  var lvls=i<=5?[1,1,1]:i<=10?[1,2,2]:i<=15?[2,2,3]:[2,3,3];
-  return {n:8+Math.floor(i/2),start:Math.max(3200,8000-i*230),min:Math.max(1800,4200-i*120),acc:.95,lvls:lvls};
+  /* tout se durcit au fil des 20 journées : nombre de messages, cadence, patience, niveau, part de WhatsApp, rafales, traduction */
+  var lvls=i<=4?[1,1,1]:i<=8?[1,1,2]:i<=12?[1,2,2]:i<=16?[2,2,3]:[2,3,3];
+  return {n:8+Math.round(i*.55),gap:Math.max(2600,7200-i*240),gapMin:Math.max(1500,3900-i*115),acc:.95,
+    pat:Math.max(9500,24000-i*720),typing:Math.max(450,1100-i*30),burst:i<7?0:Math.min(.35,(i-6)*.035),
+    waShare:i<=2?.3:i<=6?.4:.5,showFr:i<=3,lvls:lvls};
 }
 function startInbox(i){
   stopRaf();
   var c=ibCfg(i),all=window.INBOX||[],used={},msgs=[];
   for(var k=0;k<c.n;k++){
-    var want=c.lvls[k%c.lvls.length],pool=all.filter(function(m,idx){return m[7]===want&&!used[idx];});
-    if(!pool.length)pool=all.filter(function(m,idx){return !used[idx];});
+    var want=c.lvls[k%c.lvls.length],app=k===0?"t":(Math.random()<c.waShare?"w":"t");
+    var tries=[function(m){return m[7]===want&&m[0]===app;},function(m){return m[0]===app&&Math.abs(m[7]-want)<=1;},function(m){return m[7]===want;},function(){return true;}];
+    var pool=[];for(var t=0;t<tries.length&&!pool.length;t++)pool=all.filter(function(m,idx){return !used[idx]&&tries[t](m);});
     var m=pick(pool);used[all.indexOf(m)]=1;msgs.push(m);
   }
   overlay={type:"inbox",G:{i:i,c:c,msgs:msgs,spawned:0,answered:0,mistakes:0,missed:[],combo:0,maxCombo:0,score:0,status:"play",reason:""}};
@@ -727,9 +732,10 @@ var inboxApi={
   name:function(){return NAME;},
   speak:function(t){if(!S.loop.mute)speak(t,1);},
   muted:function(){return !!S.loop.mute;},
+  tone:function(a,b,c,d,e){tone(a,b,c,d,e);},
   dayName:ibDay,
   win:function(G){
-    G.status="won";var stars=G.mistakes===0?3:G.mistakes<=2?2:1,prev=ibStars(G.i);
+    G.status="won";var stars=(G.mistakes===0&&!G.lostLives)?3:(G.mistakes+G.lostLives<=2)?2:1,prev=ibStars(G.i);
     G.stars=stars;G.newBest=stars>prev;if(stars>prev)S.inbox.lv[G.i]=stars;
     G.coins=10+stars*10+G.maxCombo*2;S.loop.coins+=G.coins;markToday();save();return {stars:stars,coins:G.coins};
   },
@@ -748,7 +754,10 @@ function renderInbox(){
   var G=overlay.G;
   if(G.status==="won")return renderInboxEnd(G,true);
   if(G.status==="lost")return renderInboxEnd(G,false);
-  mountStage(G,window.InboxRacePhaser,inboxApi);
+  if(ibUI&&ibUI.__G===G&&document.getElementById("ibroot"))return;
+  stopRaf();view.innerHTML="";
+  var r=document.createElement("div");r.id="ibroot";document.body.appendChild(r);
+  ibUI=window.InboxRaceUI.mount(r,G,inboxApi);ibUI.__G=G;
 }
 function ibRecap(G){
   var miss=G.missed,list=G.msgs.slice(0,Math.max(G.answered,1)+ (G.status==="lost"?2:0));
@@ -762,7 +771,7 @@ function renderInboxEnd(G,won){
      '<div class="lstats"><div><b>'+G.score+'</b><span>points</span></div><div><b>×'+G.maxCombo+'</b><span>meilleur combo</span></div><div><b>+'+G.coins+'</b><span>pièces</span></div></div>'+
      '<p>'+(G.stars===3?"Inbox zero sans faute !":G.mistakes+" mauvaise"+(G.mistakes>1?"s":"")+" réponse"+(G.mistakes>1?"s":"")+". Rejoue sans faute pour 3 étoiles.")+'</p></div>'+
      '<div class="actions">'+(nx?'<button class="btn primary" data-inboxplay="'+nx+'">Journée suivante</button>':'<div class="card center"><b>Les 4 semaines sont bouclées, bravo !</b></div>')+'<button class="btn" data-inboxplay="'+G.i+'">Rejouer</button></div>'
-   :'<div class="card score"><div class="tag">Inbox débordée !</div><div class="big"><b>'+G.answered+'</b><small>/ '+G.msgs.length+' messages</small></div><p style="margin:8px 0 0">Astuce : réponds vite au message surligné. Une mauvaise réponse fait arriver le message suivant tout de suite.</p></div>'+
+   :'<div class="card score"><div class="tag">Trois messages restés sans réponse…</div><div class="big"><b>'+G.answered+'</b><small>/ '+G.msgs.length+' messages</small></div><p style="margin:8px 0 0">Astuce : surveille la pastille rouge de l’autre appli et les barres de patience. Réponds d’abord au message dont la barre est orange ou rouge.</p></div>'+
      '<div class="actions"><button class="btn primary" data-inboxplay="'+G.i+'">Réessayer</button><button class="btn" data-inboxmap="1">Retour à la carte</button></div>')+
    '<h2>Les messages de la journée</h2>'+ibRecap(G);
 }
@@ -778,7 +787,7 @@ function renderInboxMap(){
     '<button class="btn primary" data-inboxplay="'+cur+'">'+SVG.play+' Jouer : '+ibDay(cur)+'</button></div></div>'+
    '<div class="chips" style="margin-top:16px">'+[1,2,3,4].map(function(w){var open=ibUnlocked((w-1)*5+1);return '<button class="chip'+(wk===w?" on":"")+'" data-inboxweek="'+w+'"'+(open?"":" disabled")+'>'+(open?"":"🔒 ")+'Semaine '+w+'</button>';}).join("")+'</div>'+
    '<div class="ibpath">'+nodes+'</div>'+
-   '<h2>Comment jouer</h2><div class="card"><p>Les messages de tes collègues, de l’agence, des sponsors ou des hôtesses arrivent sur Teams et WhatsApp, de plus en plus vite.</p><p>Réponds au message surligné en choisissant la bonne réponse anglaise. Une mauvaise réponse fait arriver le message suivant aussitôt.</p><p style="margin:0">Si le fil déborde, la journée est perdue. Vide-le pour un bonus <b>Inbox zero</b>, enchaîne pour les combos, et réponds en moins de 3 secondes pour le bonus <b>FAST!</b></p></div>';
+   '<h2>Comment jouer</h2><div class="card"><p>Tu jongles entre <b>Teams</b> et <b>WhatsApp</b> avec les onglets en bas. Une notification apparaît quand un message arrive dans l’autre appli, et la pastille rouge compte les messages en attente.</p><p>Choisis la bonne réponse : elle part en bulle dans la conversation. Une mauvaise réponse fait réagir ton interlocuteur et accélère l’arrivée du message suivant.</p><p>Chaque message a une <b>barre de patience</b>. Si elle se vide, tu perds un ❤️ ; trois cœurs perdus, la journée est perdue.</p><p style="margin:0">Plus tu avances, plus c’est dur : messages plus nombreux et plus rapides, patience plus courte, anglais plus avancé, rafales sur les deux applis, et la traduction n’est plus affichée (touche un message pour la voir, −5 points).</p></div>';
 }
 
 /* ===================== RÉVISION ESPACÉE + SESSION DU JOUR ===================== */
@@ -920,9 +929,9 @@ function startCall(k){
   tone([440,480],.35,"sine",.06,0);
 }
 function callAccept(){var C=overlay.C;clearInterval(ringTimer);ringTimer=null;C.start=Date.now();callSay(C.sc.turns[0].c,function(){callChoose();});}
-function callSay(line,cb){var C=overlay.C;C.phase="talk";C.line=line;C.speaking=true;render();speakThen(line[0],function(){if(!overlay||overlay.C!==C)return;C.speaking=false;cb&&cb();},C.sc.lv===3?1:.95);}
+function callSay(line,cb){var C=overlay.C;C.phase="talk";C.line=line;C.speaking=true;render();speakThen(line[0],function(){if(!overlay||overlay.C!==C)return;C.speaking=false;cb&&cb();},Math.min(1.08,.9+C.k*.02));}
 function callChoose(){
-  var C=overlay.C,turn=C.sc.turns[C.t];C.phase="choose";C.opts=shuffle(turn.o.map(function(o,i){return {o:o,i:i};}));C.left=CALL_TIME[C.sc.lv];C.tmax=C.left;render();
+  var C=overlay.C,turn=C.sc.turns[C.t];C.phase="choose";C.opts=shuffle(turn.o.map(function(o,i){return {o:o,i:i};}));C.left=Math.max(7,CALL_TIME[C.sc.lv]-Math.floor(C.k/3));C.tmax=C.left;render();
   clearInterval(callTimer);
   callTimer=setInterval(function(){
     if(!overlay||overlay.type!=="call"||overlay.C!==C||C.phase!=="choose"){clearInterval(callTimer);return;}
