@@ -500,11 +500,15 @@ nav.tabs .in{position:relative;display:grid;grid-template-columns:repeat(5,1fr)}
 .cjs{font-size:12px;font-weight:700;color:#B9BCF5}
 .ccontact.locked{opacity:.5}.ccontact.cur{box-shadow:inset 3px 0 0 var(--cta)}
 .cskiptog{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;color:var(--muted)}
+
+.pform{grid-template-columns:1fr auto}
+.pform input{text-align:left;padding:0 14px;font-size:17px;min-height:48px}
+.pform .btn{width:auto;padding:10px 16px}
 </style>
 </head>
 <body>
 <div class="app">
-  <header class="top" id="hdr"><span>Speaker Ready · Anglais des congrès</span><h1 id="htitle">Accueil</h1></header>
+  <header class="top" id="hdr"><span>Speaker Ready</span><h1 id="htitle">Accueil</h1></header>
   <main id="view" aria-live="polite"></main>
 </div>
 <nav class="tabs" aria-label="Navigation principale"><div class="in" id="tabs"></div></nav>

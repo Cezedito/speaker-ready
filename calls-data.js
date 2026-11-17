@@ -8,7 +8,7 @@ window.CALLS=[
 {id:"martin",name:"Prof. Martin",role:"Président du congrès · client",av:"👨‍⚕️",col:"#5B5FC7",lv:1,
  title:"Faire valider le plan de com'",goal:"Le client appelle au sujet du plan de communication envoyé hier. Obtiens son feu vert.",
  turns:[
-  {c:["Hello, it's Professor Martin. Do you have a minute?","Bonjour, c'est le professeur Martin. Vous avez une minute ?"],
+  {c:["Hello {name}, it's Professor Martin. Do you have a minute?","Bonjour {name}, c'est le professeur Martin. Vous avez une minute ?"],
    o:[["Of course, Professor. How can I help?","Bien sûr, professeur. Que puis-je pour vous ?",2],
       ["Who is this, please?","C'est de la part de qui ?",-1,["Professor Martin… from the congress.","Le professeur Martin… du congrès."]],
       ["Yes. Quick, I'm busy.","Oui. Vite, je suis occupée.",-2,["Oh. Well, I'll try to be brief then.","Oh. Bon, je vais essayer d'être bref alors."]]]},
@@ -24,12 +24,12 @@ window.CALLS=[
    o:[["Thank you, Professor. I'll keep you posted.","Merci, professeur. Je vous tiens au courant.",2],
       ["OK, bye.","OK, salut.",0],
       ["Finally!","Enfin !",-2,["I beg your pardon?","Pardon ?"]]]}],
- end:{good:["Excellent work. I'm glad we're on the same page.","Excellent travail. Ravi que nous soyons sur la même longueur d'onde."],ok:["Fine. Send me the updated plan.","Bien. Envoyez-moi le plan mis à jour."],bad:["I'll call your manager to discuss this.","J'appellerai votre responsable pour en discuter."]}},
+ end:{good:["Excellent work, {name}. I'm glad we're on the same page.","Excellent travail, {name}. Ravi que nous soyons sur la même longueur d'onde."],ok:["Fine. Send me the updated plan.","Bien. Envoyez-moi le plan mis à jour."],bad:["I'll call your manager to discuss this.","J'appellerai votre responsable pour en discuter."]}},
 
 {id:"kevin",name:"Kevin",role:"Support informatique",av:"🧑‍💻",col:"#2F9E66",lv:1,
  title:"Problème de visio",goal:"Ta visio avec le client commence dans 10 minutes et le partage d'écran ne marche pas. L'IT te rappelle.",
  turns:[
-  {c:["Hi, Kevin from IT. You said you have an issue with Teams?","Salut, Kevin de l'IT. Tu as un souci avec Teams ?"],
+  {c:["Hi {name}, Kevin from IT. You said you have an issue with Teams?","Salut {name}, Kevin de l'IT. Tu as un souci avec Teams ?"],
    o:[["Yes, I can't share my screen and my meeting starts in ten minutes.","Oui, je n'arrive pas à partager mon écran et ma réunion commence dans dix minutes.",2],
       ["Yes, it doesn't work.","Oui, ça ne marche pas.",0,["OK… what exactly doesn't work?","OK… qu'est-ce qui ne marche pas exactement ?"]],
       ["Teams is rubbish.","Teams, c'est nul.",-1,["Ha. Let's see what we can do anyway.","Ha. Voyons ce qu'on peut faire quand même."]]]},
@@ -50,7 +50,7 @@ window.CALLS=[
 {id:"julie",name:"Julie",role:"Collègue",av:"👩‍💼",col:"#E2725B",lv:1,
  title:"Une collègue malade",goal:"Julie est malade et doit te passer un dossier. Rassure-la et récupère les infos.",
  turns:[
-  {c:["Hi, it's Julie. I'm really sorry, I'm off sick today.","Salut, c'est Julie. Je suis vraiment désolée, je suis malade aujourd'hui."],
+  {c:["Hi {name}, it's Julie. I'm really sorry, I'm off sick today.","Salut {name}, c'est Julie. Je suis vraiment désolée, je suis malade aujourd'hui."],
    o:[["Oh no, I'm sorry to hear that. Don't worry, I'll cover for you.","Oh non, désolée de l'apprendre. Ne t'inquiète pas, je te remplace.",2],
       ["Oh. OK.","Ah. OK.",0,["Er… can you cover for me?","Euh… tu peux me remplacer ?"]],
       ["Again?","Encore ?",-2,["Yes… again. Sorry.","Oui… encore. Désolée."]]]},
@@ -66,12 +66,12 @@ window.CALLS=[
    o:[["No worries at all. Get well soon!","Pas de souci. Rétablis-toi vite !",2],
       ["You're welcome.","De rien.",1],
       ["Yes, you do.","Oui, tu me dois bien ça.",-1,["Ha… right.","Ha… d'accord."]]]}],
- end:{good:["You're the best. See you on Monday!","T'es la meilleure. À lundi !"],ok:["Thanks, talk soon.","Merci, à bientôt."],bad:["OK… I'll try to manage.","OK… je vais essayer de me débrouiller."]}},
+ end:{good:["You're the best, {name}. See you on Monday!","T'es la meilleure, {name}. À lundi !"],ok:["Thanks, talk soon.","Merci, à bientôt."],bad:["OK… I'll try to manage.","OK… je vais essayer de me débrouiller."]}},
 
 {id:"lee",name:"Dr Lee",role:"Intervenant · keynote",av:"👩‍⚕️",col:"#128C7E",lv:2,
  title:"Vol retardé",goal:"Le conférencier principal appelle de l'aéroport. Sa plénière est demain matin.",
  turns:[
-  {c:["Hello, Dr Lee here. My flight has been delayed by three hours.","Bonjour, ici le Dr Lee. Mon vol a trois heures de retard."],
+  {c:["Hello {name}, Dr Lee here. My flight has been delayed by three hours.","Bonjour {name}, ici le Dr Lee. Mon vol a trois heures de retard."],
    o:[["Thank you for letting us know. What time do you expect to land?","Merci de nous prévenir. À quelle heure pensez-vous atterrir ?",2],
       ["Oh no, that's a big problem.","Oh non, c'est un gros problème.",0,["Yes, I know, I'm sorry.","Oui, je sais, je suis désolée."]],
       ["That's not my problem.","Ce n'est pas mon problème.",-2,["Excuse me? I'm your keynote speaker.","Pardon ? Je suis votre conférencière principale."]]]},
@@ -92,7 +92,7 @@ window.CALLS=[
 {id:"lisa",name:"Lisa",role:"Sponsor · laboratoire",av:"🧑‍💼",col:"#C2543E",lv:2,
  title:"Sponsor en colère",goal:"Un sponsor important découvre l'emplacement de son stand. Désamorce et trouve une solution.",
  turns:[
-  {c:["Hi, it's Lisa. I've just seen the floor plan. Our booth is next to the toilets!","Bonjour, c'est Lisa. Je viens de voir le plan. Notre stand est à côté des toilettes !"],
+  {c:["{name}, it's Lisa. I've just seen the floor plan. Our booth is next to the toilets!","{name}, c'est Lisa. Je viens de voir le plan. Notre stand est à côté des toilettes !"],
    o:[["I completely understand your frustration. Let me see what I can do.","Je comprends tout à fait votre agacement. Laissez-moi voir ce que je peux faire.",2],
       ["Oh. Is that a problem?","Ah. C'est un problème ?",-1,["Of course it's a problem!","Évidemment que c'est un problème !"]],
       ["It's a great location, lots of people go there.","C'est un super emplacement, plein de gens y passent.",-2,["Are you joking?","Vous plaisantez ?"]]]},
@@ -108,12 +108,12 @@ window.CALLS=[
    o:[["You can. Thank you for your patience, Lisa.","Vous pouvez. Merci pour votre patience, Lisa.",2],
       ["Sure.","Bien sûr.",1],
       ["Calm down, it's only a booth.","Calmez-vous, ce n'est qu'un stand.",-2,["Only a booth? Unbelievable.","Qu'un stand ? Incroyable."]]]}],
- end:{good:["Thank you. I appreciate how you handled this.","Merci. J'apprécie la façon dont vous avez géré ça."],ok:["Fine. Let's talk tomorrow.","Bien. On en reparle demain."],bad:["I'll escalate this to your director.","Je vais remonter ça à votre directeur."]}},
+ end:{good:["Thank you, {name}. I appreciate how you handled this.","Merci, {name}. J'apprécie la façon dont vous avez géré ça."],ok:["Fine. Let's talk tomorrow.","Bien. On en reparle demain."],bad:["I'll escalate this to your director.","Je vais remonter ça à votre directeur."]}},
 
 {id:"hotel",name:"Grand Hôtel",role:"Service groupes",av:"🛎️",col:"#00205B",lv:2,
  title:"Le contingent de chambres",goal:"L'hôtel appelle : la date de libération des chambres approche et le contingent n'est pas rempli.",
  turns:[
-  {c:["Good morning, this is the group sales team at the Grand Hotel.","Bonjour, ici le service groupes du Grand Hôtel."],
+  {c:["Good morning, is that {name}? This is the group sales team at the Grand Hotel.","Bonjour, c'est bien {name} ? Ici le service groupes du Grand Hôtel."],
    o:[["Good morning! Thanks for calling. Is it about our room block?","Bonjour ! Merci d'appeler. C'est au sujet de notre contingent ?",2],
       ["Yes?","Oui ?",0],
       ["We don't need anything, thanks.","On n'a besoin de rien, merci.",-2,["It's about your booking, actually.","C'est au sujet de votre réservation, en fait."]]]},
@@ -134,7 +134,7 @@ window.CALLS=[
 {id:"ben",name:"Ben",role:"Journaliste · presse médicale",av:"🧑‍🎤",col:"#5B5FC7",lv:3,
  title:"Le journaliste pressé",goal:"Un journaliste veut publier les résultats d'un essai avant la levée de l'embargo.",
  turns:[
-  {c:["Hi, Ben from Health Today. I've got the results of the late-breaking trial.","Bonjour, Ben de Health Today. J'ai les résultats de l'essai de dernière minute."],
+  {c:["Hi {name}, Ben from Health Today. I've got the results of the late-breaking trial.","Bonjour {name}, Ben de Health Today. J'ai les résultats de l'essai de dernière minute."],
    o:[["Hi Ben. Just a reminder, those data are under embargo until Friday at eight a.m.","Bonjour Ben. Petit rappel : ces données sont sous embargo jusqu'à vendredi 8h.",2],
       ["Great, what do you think?","Super, vous en pensez quoi ?",-1,["I think they're huge news.","Je pense que c'est une énorme info."]],
       ["How did you get them?","Comment vous les avez eues ?",0,["They were in the press kit.","Elles étaient dans le dossier de presse."]]]},
@@ -155,7 +155,7 @@ window.CALLS=[
 {id:"emma",name:"Emma",role:"Agence digitale",av:"👩‍🎨",col:"#E2725B",lv:3,
  title:"L'agence en retard",goal:"L'agence annonce du retard sur le site du congrès. Garde le contrôle des priorités.",
  turns:[
-  {c:["Hi, it's Emma from the agency. I'm afraid we need two more weeks for the website.","Bonjour, c'est Emma de l'agence. Je crains qu'il nous faille deux semaines de plus pour le site."],
+  {c:["Hi {name}, it's Emma from the agency. I'm afraid we need two more weeks for the website.","Bonjour {name}, c'est Emma de l'agence. Je crains qu'il nous faille deux semaines de plus pour le site."],
    o:[["Two weeks is a lot for us. What's causing the delay?","Deux semaines, c'est beaucoup pour nous. Qu'est-ce qui cause ce retard ?",2],
       ["No problem, take your time.","Pas de problème, prenez votre temps.",-1,["Oh, great, thanks!","Ah, super, merci !"]],
       ["Are you serious? You're useless.","Vous êtes sérieuse ? Vous êtes nuls.",-2,["There's no need to be rude.","Pas la peine d'être impolie."]]]},
@@ -176,7 +176,7 @@ window.CALLS=[
 {id:"chef",name:"Marco",role:"Traiteur",av:"👨‍🍳",col:"#2F9E66",lv:3,
  title:"Négocier le devis traiteur",goal:"Le traiteur appelle pour son devis. Il dépasse ton budget de 15 %.",
  turns:[
-  {c:["Hello, Marco from Gusto Catering. Did you get our quote?","Bonjour, Marco de Gusto Traiteur. Vous avez reçu notre devis ?"],
+  {c:["Hello {name}, Marco from Gusto Catering. Did you get our quote?","Bonjour {name}, Marco de Gusto Traiteur. Vous avez reçu notre devis ?"],
    o:[["Yes, thank you. It looks great, but it's a bit above our budget.","Oui, merci. Il est très bien, mais un peu au-dessus de notre budget.",2],
       ["Yes, it's too expensive.","Oui, c'est trop cher.",0,["Too expensive? Our quality is excellent.","Trop cher ? Notre qualité est excellente."]],
       ["Not yet.","Pas encore.",-1,["I sent it last week…","Je l'ai envoyé la semaine dernière…"]]]},
@@ -197,7 +197,7 @@ window.CALLS=[
 {id:"newclient",name:"Sarah Collins",role:"Société savante · prospect",av:"👩‍🏫",col:"#00205B",lv:3,
  title:"Convaincre un nouveau client",goal:"Une société savante cherche une agence pour son congrès 2028. Décroche un rendez-vous.",
  turns:[
-  {c:["Hello, I'm Sarah Collins from the European Dermatology Society. We're looking for a partner for our 2028 congress.","Bonjour, Sarah Collins de la Société européenne de dermatologie. Nous cherchons un partenaire pour notre congrès 2028."],
+  {c:["Hello, is this {name}? I'm Sarah Collins from the European Dermatology Society. We're looking for a partner for our 2028 congress.","Bonjour, c'est bien {name} ? Sarah Collins, de la Société européenne de dermatologie. Nous cherchons un partenaire pour notre congrès 2028."],
    o:[["Thank you for thinking of us! Could you tell me a bit more about the congress?","Merci d'avoir pensé à nous ! Pourriez-vous m'en dire un peu plus sur le congrès ?",2],
       ["OK. How many people?","OK. Combien de personnes ?",0],
       ["We're very busy in 2028.","On est très chargés en 2028.",-2,["Oh. I'll call someone else, then.","Ah. J'appellerai quelqu'un d'autre, alors."]]]},
@@ -213,5 +213,5 @@ window.CALLS=[
    o:[["With pleasure. Would next Tuesday at ten suit you?","Avec plaisir. Mardi prochain à dix heures, cela vous conviendrait ?",2],
       ["Yes, when?","Oui, quand ?",1],
       ["Can you send me the RFP first?","Vous pouvez d'abord m'envoyer l'appel d'offres ?",1]]}],
- end:{good:["Perfect. I look forward to meeting you on Tuesday.","Parfait. Au plaisir de vous rencontrer mardi."],ok:["I'll get back to you with a date.","Je reviens vers vous avec une date."],bad:["Thank you, we'll be in touch.","Merci, nous vous recontacterons."]}}
+ end:{good:["Perfect, {name}. I look forward to meeting you on Tuesday.","Parfait, {name}. Au plaisir de vous rencontrer mardi."],ok:["I'll get back to you with a date.","Je reviens vers vous avec une date."],bad:["Thank you, we'll be in touch.","Merci, nous vous recontacterons."]}}
 ];

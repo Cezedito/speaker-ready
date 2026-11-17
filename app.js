@@ -3,6 +3,21 @@
 (function(){
 "use strict";
 
+/* ===================== PRÉNOM =====================
+   Le prénom de l'apprenante (réglable dans « Ma progression »). Les contenus utilisent le repère {name}. */
+var NAME=(function(){try{var o=JSON.parse(localStorage.getItem("congress-english:v3")||"{}");if(o.profile&&o.profile.name)return String(o.profile.name).trim().slice(0,30);}catch(e){}return "Clara";})();
+function personalize(v){
+  if(typeof v==="string")return v.split("{name}").join(NAME);
+  if(Array.isArray(v)){for(var i=0;i<v.length;i++)v[i]=personalize(v[i]);return v;}
+  if(v&&typeof v==="object"){for(var k in v)v[k]=personalize(v[k]);return v;}
+  return v;
+}
+personalize(window.LESSONS||[]);personalize(window.CALLS||[]);
+/* dans Inbox Race, une question sur deux l'interpelle par son prénom */
+(window.INBOX||[]).forEach(function(m,i){
+  if(i%2===0&&/^(Can|Could|Did|Are|Is|Do|Where|When|Which|How|What|Would|Have)\b/.test(m[2])&&/\?\s*\S*$/.test(m[2]))m[2]=NAME+", "+m[2].charAt(0).toLowerCase()+m[2].slice(1);
+});
+
 /* ===================== DONNÉES ===================== */
 var LESSONS=(window.LESSONS||[]).slice().sort(function(a,b){return a.w-b.w;});
 var BYW={};LESSONS.forEach(function(l){BYW[l.w]=l;});
@@ -42,7 +57,7 @@ var SVG={
 
 /* ===================== ÉTAT ===================== */
 var KEY="congress-english:v3";
-var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{},calls:{}};
+var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{},calls:{},profile:{name:NAME}};
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in S){if(o[k]!==undefined)S[k]=o[k];}}}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 save();
@@ -120,8 +135,9 @@ function sessTile(){
   if(p.due.length)parts.push(p.due.length+" mot"+(p.due.length>1?"s":"")+" à revoir");
   if(p.nw.length)parts.push(p.nw.length+" nouveaux mots");
   parts.push("quiz","défi");
-  return '<button class="tile cont span2 sesstile'+(done?" done":"")+'" data-session="1"><span class="ico cta">'+(done?"✓":SVG.play)+'</span><span class="txt"><span class="tag">'+(done?"Session du jour faite · série "+streak()+" 🔥":"Ma session du jour · 10 min")+'</span><b>'+(done?"Refaire une session":parts.join(" · "))+'</b></span><span class="chev" aria-hidden="true"></span></button>';
+  return '<button class="tile cont span2 sesstile'+(done?" done":"")+'" data-session="1"><span class="ico cta">'+(done?"✓":SVG.play)+'</span><span class="txt"><span class="tag">'+(done?"Session du jour faite · série "+streak()+" 🔥":esc(NAME)+", ta session du jour · 10 min")+'</span><b>'+(done?"Refaire une session":parts.join(" · "))+'</b></span><span class="chev" aria-hidden="true"></span></button>';
 }
+function greet(){var h=new Date().getHours();return (h>=18||h<4?"Bonsoir ":"Bonjour ")+NAME+" 👋";}
 function countUp(){
   var el=$("#cnt");if(!el)return;var to=+el.dataset.to;
   if(!to||(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches))return;
@@ -454,7 +470,7 @@ function renderOral(){
   if(!O.item)nextOral();
   var it=O.item,m=O.mode,n=oralToday(),pct=Math.min(100,Math.round(n/ORAL_GOAL*100)),desc=ORAL_MODES.filter(function(x){return x[0]===m;})[0][2];
   var chips='<div class="chips">'+ORAL_MODES.map(function(x){return '<button class="chip'+(x[0]===m?" on":"")+'" data-omode="'+x[0]+'">'+x[1]+'</button>';}).join("")+'</div>';
-  var goal='<div class="card ogoal"><div class="ogoal-h"><span class="tag">Objectif du jour</span><b>'+n+' / '+ORAL_GOAL+' phrases dites'+(n>=ORAL_GOAL?" 🎉":"")+'</b></div><div class="prog"><i style="width:'+pct+'%"></i></div></div>';
+  var goal='<div class="card ogoal"><div class="ogoal-h"><span class="tag">Objectif du jour</span><b>'+n+' / '+ORAL_GOAL+' phrases dites'+(n>=ORAL_GOAL?" · bravo "+esc(NAME)+" 🎉":"")+'</b></div><div class="prog"><i style="width:'+pct+'%"></i></div></div>';
   var prompt;
   if(m==="repeat")prompt='<span class="pill">Leçon '+lnum(BYW[it.w])+' · '+esc(BYW[it.w].t)+'</span><div class="phrase">'+esc(it.en)+'</div><p class="muted" style="margin:0">'+esc(it.fr)+'</p>';
   else if(m==="translate")prompt='<span class="pill">Dis-le en anglais</span><div class="phrase fr">'+esc(it.fr)+'</div>';
@@ -572,6 +588,7 @@ function buzz(p){try{if(navigator.vibrate)navigator.vibrate(p);}catch(e){}}
 var loopGame=null;
 function stopRaf(){if(loopGame){try{loopGame.destroy(true);}catch(e){}loopGame=null;}var st=document.getElementById("loopstage");if(st)st.remove();}
 var loopApi={
+  name:function(){return NAME;},
   speak:function(w,r){var audio=overlay&&overlay.G&&overlay.G.c.mode==="audio";if(!S.loop.mute||audio)speak(head(w.en),r||1);},
   head:function(w){return head(w.en);},
   muted:function(){return !!S.loop.mute;},
@@ -671,6 +688,7 @@ function startInbox(i){
   overlay={type:"inbox",G:{i:i,c:c,msgs:msgs,spawned:0,answered:0,mistakes:0,missed:[],combo:0,maxCombo:0,score:0,status:"play",reason:""}};
 }
 var inboxApi={
+  name:function(){return NAME;},
   speak:function(t){if(!S.loop.mute)speak(t,1);},
   muted:function(){return !!S.loop.mute;},
   dayName:ibDay,
@@ -801,7 +819,7 @@ function renderSession(){
   /* défi final */
   var cl=currentLevel(),ib=ibCurrent(),rev=s.due.length,okq=s.quiz.res.filter(Boolean).length;
   view.innerHTML=sessHeader("Session bouclée !")+
-   '<div class="tile navy span2" style="margin-top:6px"><div class="tag">Bravo, c’est fait pour aujourd’hui</div>'+
+   '<div class="tile navy span2" style="margin-top:6px"><div class="tag">Bravo '+esc(NAME)+', c’est fait pour aujourd’hui</div>'+
    '<div class="lstats"><div><b>'+rev+'</b><span>mots révisés</span></div><div><b>'+s.nw.length+'</b><span>nouveaux mots</span></div><div><b>'+okq+'/'+s.quiz.qs.length+'</b><span>au quiz</span></div></div>'+
    '<p>Série : '+streak()+' jour'+(streak()>1?"s":"")+' 🔥 · Prochaine révision : '+srsNextLabel()+'</p></div>'+
    '<h2>Défi du jour (facultatif)</h2><div class="stack">'+
@@ -828,7 +846,8 @@ function importCode(code){
   for(var k in o)S[k]=o[k];save();
 }
 function backupHTML(){
-  var out='<h2>Ma progression</h2><div class="card"><p style="margin:0 0 12px">Ta progression est enregistrée sur cet appareil. Sauvegarde-la de temps en temps pour la retrouver si tu changes de téléphone.</p>'+
+  var out='<h2>Mon profil</h2><div class="card"><div class="oform pform"><input id="pname" value="'+esc(NAME)+'" maxlength="30" aria-label="Prénom"><button class="btn primary" data-pname="1">Enregistrer</button></div><p class="tag" style="margin:8px 0 0">Ton prénom apparaît dans l’appli, les messages et les appels.</p></div>'+
+    '<h2>Ma progression</h2><div class="card"><p style="margin:0 0 12px">Ta progression est enregistrée sur cet appareil. Sauvegarde-la de temps en temps pour la retrouver si tu changes de téléphone.</p>'+
     '<div class="row2"><button class="btn" data-backup="export">Exporter</button><button class="btn" data-backup="import">Importer</button></div>';
   if(backupMode==="export")out+='<textarea class="codebox" id="bcode" readonly>'+exportCode()+'</textarea><div class="row2"><button class="btn primary" data-backup="copy">Copier le code</button><button class="btn" data-backup="file">Télécharger</button></div>';
   if(backupMode==="import")out+='<textarea class="codebox" id="bin" placeholder="Colle ici ton code de sauvegarde (il commence par SR1:)"></textarea><div class="actions" style="margin-top:10px"><button class="btn primary" data-backup="restore">Restaurer</button></div>';
@@ -944,7 +963,7 @@ function renderCall(){
   }
   if(C.phase==="done"){
     root.className="callscr done";
-    var res=C.hung?"Appel raccroché":C.stars>=3?"Appel parfait !":C.stars===2?"Bon appel":C.stars===1?"Appel moyen":"Client mécontent";
+    var res=C.hung?"Appel raccroché":C.stars>=3?"Appel parfait, "+esc(NAME)+" !":C.stars===2?"Bon appel":C.stars===1?"Appel moyen":"Client mécontent";
     root.innerHTML='<div class="cdone"><div class="cav sm" style="background:'+sc.col+'">'+sc.av+'</div><div class="ctitle">'+res+'</div>'+
       '<div class="cstars">'+[1,2,3].map(function(k){return '<span class="'+(k<=C.stars?"on":"")+'">★</span>';}).join("")+'</div>'+
       '<div class="lstats"><div><b>'+satFace(C.sat)+' '+C.sat+'%</b><span>satisfaction</span></div><div><b>'+fmtDur(C.dur)+'</b><span>durée</span></div><div><b>+'+C.coins+'</b><span>pièces</span></div></div>'+
@@ -993,7 +1012,7 @@ function render(){
   var inov=!!overlay;
   document.body.classList.toggle("inquiz",inov);
   $("#hdr").style.display=(inov||(tab==="lessons"&&route.lesson)||(tab==="games"&&(loopMap||inboxMap||callsMap)))?"none":"";
-  renderTabs();$("#htitle").textContent=TITLES[tab];
+  renderTabs();$("#htitle").textContent=tab==="home"?greet():TITLES[tab];
   if(overlay){
     if(overlay.type==="quiz")renderQuiz();
     else if(overlay.type==="session")renderSession();
@@ -1071,6 +1090,7 @@ document.addEventListener("click",function(e){
   if(d.sqnext){var sq2=overlay.s.quiz;return go(function(){if(sq2.pos<sq2.qs.length-1){sq2.pos++;sq2.locked=false;sq2.picked=null;}else sessNext();});}
   if(d.sgame==="loop"){var c0=currentLevel();return go(function(){tab="games";loopMap=true;loopWorld=c0.w;startLoop(c0.w,c0.i);});}
   if(d.sgame==="inbox"){var i0=ibCurrent();return go(function(){tab="games";inboxMap=true;inboxWeek=Math.ceil(i0/5);startInbox(i0);});}
+  if(d.pname){var nv=($("#pname").value||"").trim().slice(0,30);if(nv){S.profile={name:nv};save();location.reload();}return;}
   /* sauvegarde */
   if(d.backup){
     var bm=d.backup;

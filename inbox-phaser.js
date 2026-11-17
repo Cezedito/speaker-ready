@@ -281,7 +281,7 @@ class InboxScene extends Phaser.Scene{
       self.time.delayedCall(1800,function(){conf.emitting=false;});
       var pw=Math.min(330,W-40),ph=360,panel=self.add.container(W/2,-ph).setDepth(71);
       var g=self.add.graphics();g.fillStyle(0x000000,.2);g.fillRoundedRect(-pw/2,-ph/2+8,pw,ph,30);g.fillStyle(C.teams,1);g.fillRoundedRect(-pw/2,-ph/2,pw,ph,30);
-      panel.add(g);panel.add(self.txt(0,-ph/2+42,"INBOX ZERO !",28,"#ffffff",{display:true,align:"center"}));
+      panel.add(g);panel.add(self.txt(0,-ph/2+42,"INBOX ZERO !",28,"#ffffff",{display:true,align:"center"}));if(self.api.name)panel.add(self.txt(0,-ph/2+72,"Bien joué "+self.api.name()+" 💜",14,"#DCDDF7",{align:"center"}));
       var stars=[];for(var k=0;k<3;k++){var sx=(k-1)*76,sy=-ph/2+112+(k===1?-12:0);panel.add(self.add.star(sx,sy,5,16,36,0xffffff,.18));var st=self.add.star(sx,sy,5,16,36,C.gold,1).setScale(0);panel.add(st);stars.push(st);}
       var scoreT=self.txt(0,-ph/2+190,"0",44,"#ffffff",{display:true,align:"center"});panel.add(scoreT);
       panel.add(self.txt(0,-ph/2+222,"points  ·  meilleur combo ×"+G.maxCombo,13,"#DCDDF7",{align:"center"}));
