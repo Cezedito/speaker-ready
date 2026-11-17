@@ -182,7 +182,7 @@ function renderHome(){
   countUp();
 }
 function renderSettings(){
-  view.innerHTML='<button class="backlink" data-settings="0">‹ Accueil</button><h1 class="stitle">Réglages</h1>'+backupHTML();
+  view.innerHTML='<button class="backlink" data-settings="0">‹ Accueil</button><h1 class="stitle">Réglages</h1>'+backupHTML()+'<h2>Jeux</h2><div class="card"><p style="margin:0 0 12px">Les explications s’affichent au lancement de chaque jeu tant que tu n’as pas coché « ne plus afficher ».</p><button class="btn" data-tipsreset="1">Revoir les explications des jeux</button></div>';
 }
 function sessTile(){
   var p=sessPlan(),done=sessDoneToday(),parts=[];
@@ -944,6 +944,56 @@ function backupHTML(){
   return out+'</div>';
 }
 
+
+/* ===================== EXPLICATIONS DES JEUX ===================== */
+if(!S.tips||typeof S.tips!=="object")S.tips={};
+var TIPS_SEEN={};
+var TIPS={
+ loop:{t:"Congress Loop",ic:"🍲",steps:[
+   ["👀","Chaque client attend un mot <b>en français</b> au-dessus de sa marmite."],
+   ["👆","Touche sur le tapis le mot <b>anglais</b> qui correspond : il file dans la bonne marmite."],
+   ["⏳","La jauge autour du client se vide. S’il part, tu perds un ❤️. Trois cœurs perdus = perdu."],
+   ["🧺","Un mot sans marmite va sur le <b>plateau d’attente</b>. Plateau plein = perdu aussi."],
+   ["🔥","Enchaîne pour les combos et la <b>FEVER</b>. Les bonus Indice, Gel et Case te sauvent la mise."]]},
+ inbox:{t:"Inbox Race",ic:"💬",steps:[
+   ["📱","Tes collègues t’écrivent sur <b>Teams</b> et <b>WhatsApp</b>. Passe d’une appli à l’autre avec les onglets en bas."],
+   ["🔴","La pastille rouge compte les messages en attente. Une notification s’affiche quand l’autre appli sonne."],
+   ["💬","Choisis la bonne réponse anglaise : elle part en bulle dans la conversation."],
+   ["⏳","Chaque message a une barre de patience. Si elle se vide, tu perds un ❤️."],
+   ["🌐","Touche un message pour lire sa traduction (−5 points)."]]},
+ call:{t:"Le Coup de fil",ic:"📞",steps:[
+   ["📲","Ton téléphone sonne : décroche avec le bouton vert."],
+   ["👂","Écoute ton interlocuteur. Les sous-titres et la traduction s’activent avec les boutons de l’écran d’appel."],
+   ["✅","Choisis ta réponse avant la fin du chrono, puis <b>dis-la à voix haute</b> : l’appli t’écoute."],
+   ["😀","Chaque réponse fait monter ou baisser la satisfaction du client. Vise 3 étoiles !"]]},
+ memory:{t:"Paires",ic:"🃏",steps:[["🃏","Retourne deux cartes à la fois."],["🔗","Trouve chaque mot anglais et sa traduction française."],["🏆","Termine en un minimum de coups."]]},
+ chrono:{t:"Vrai ou faux chrono",ic:"⏱️",steps:[["👀","Un mot anglais et une traduction s’affichent."],["✅","Réponds Vrai ou Faux le plus vite possible."],["⏱️","Tu as 60 secondes pour marquer un max de points."]]},
+ scramble:{t:"Phrase en désordre",ic:"🧩",steps:[["🧩","Les mots d’une phrase sont mélangés."],["👆","Touche-les dans le bon ordre pour reconstruire la phrase."],["✅","Vérifie, puis passe à la suivante."]]},
+ dictee:{t:"Dictée",ic:"✍️",steps:[["🔊","Écoute le mot (tu peux le réécouter, même lentement)."],["⌨️","Écris-le en anglais."],["✅","Valide pour voir si c’est juste."]]}
+};
+function tipFor(d){
+  if(d.loopplay||d.sgame==="loop")return "loop";
+  if(d.inboxplay||d.sgame==="inbox")return "inbox";
+  if(d.callplay!==undefined)return "call";
+  if(d.game&&TIPS[d.game])return d.game;
+  return null;
+}
+function showTip(id,el){
+  var T=TIPS[id],m=document.createElement("div");m.className="tipm";
+  m.innerHTML='<div class="tipc" role="dialog" aria-modal="true"><div class="tiph"><span class="tipi">'+T.ic+'</span><div><span class="tag">Comment jouer</span><b>'+T.t+'</b></div></div>'+
+    '<ol class="tips">'+T.steps.map(function(x){return '<li><span>'+x[0]+'</span><p>'+x[1]+'</p></li>';}).join("")+'</ol>'+
+    '<label class="tipchk"><input type="checkbox" id="tipno"><span>J’ai compris, ne plus afficher</span></label>'+
+    '<div class="row2"><button class="btn" data-tipclose="0">Annuler</button><button class="btn primary" data-tipclose="1">C’est parti !</button></div></div>';
+  document.body.appendChild(m);
+  m.addEventListener("click",function(e){
+    var b=e.target.closest("[data-tipclose]");if(!b&&e.target!==m)return;
+    e.stopPropagation();
+    var go1=b&&b.getAttribute("data-tipclose")==="1";
+    if(m.querySelector("#tipno").checked){S.tips[id]=1;save();}
+    TIPS_SEEN[id]=1;m.classList.add("out");setTimeout(function(){m.remove();},200);
+    if(go1)el.click();
+  });
+}
 /* ===================== LE COUP DE FIL ===================== */
 if(!S.calls||typeof S.calls!=="object")S.calls={};
 var callsMap=false,callTimer=null,ringTimer=null;
@@ -1228,6 +1278,8 @@ document.addEventListener("gesturestart",function(e){e.preventDefault();},{passi
 document.addEventListener("click",function(e){
   var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
   if(el.form&&el.type==="submit")return;
+  var tipId=tipFor(d);if(tipId&&!S.tips[tipId]&&!TIPS_SEEN[tipId]){showTip(tipId,el);return;}
+  if(d.tipsreset)return go(function(){S.tips={};TIPS_SEEN={};save();backupMsg="Les explications des jeux s’afficheront de nouveau.";});
   if(d.settings!==undefined)return go(function(){settingsOpen=d.settings==="1";});
   if(d.tab)return go(function(){settingsOpen=false;stopTimer();stopRaf();callClose();overlay=null;loopMap=false;inboxMap=false;callsMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
   if(d.say!==undefined){speak(d.say);return;}

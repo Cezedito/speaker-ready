@@ -697,6 +697,16 @@ header.top{position:relative}
 .cclose{position:sticky;top:0;z-index:5;border:0;border-radius:99px;background:rgba(255,255,255,.18);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);color:#fff;font:inherit;font-size:15px;font-weight:700;padding:8px 14px;margin-bottom:4px}
 .swtop{position:fixed;inset:0;z-index:4;overflow:hidden;pointer-events:none;box-shadow:-8px 0 24px rgba(0,0,0,.18);will-change:transform}
 .swdim{position:fixed;inset:0;z-index:3;background:#000;opacity:.12;pointer-events:none}
+.tipm{position:fixed;inset:0;z-index:300;background:rgba(0,16,48,.45);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;padding:12px 12px calc(env(safe-area-inset-bottom) + 12px);animation:vFade .25s both}
+.tipm.out{opacity:0;transition:opacity .2s}
+.tipc{width:100%;max-width:440px;background:var(--surface);color:var(--ink);border-radius:28px;padding:20px 18px 16px;box-shadow:0 20px 50px rgba(0,0,0,.35);animation:sheetup .38s cubic-bezier(.2,.9,.3,1.1) both;max-height:85vh;overflow:auto}
+.tiph{display:flex;align-items:center;gap:12px;margin-bottom:12px}.tiph b{display:block;font-family:var(--f-display);font-weight:800;font-size:22px}
+.tipi{width:52px;height:52px;border-radius:16px;background:var(--icon-bg);display:grid;place-items:center;font-size:28px;flex:none}
+.tips{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:10px}
+.tips li{display:flex;gap:12px;align-items:flex-start}.tips li span{font-size:20px;width:28px;text-align:center;flex:none}
+.tips li p{margin:0;font-size:15.5px;line-height:1.4}
+.tipchk{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;margin:4px 2px 14px;cursor:pointer}
+.tipchk input{width:22px;height:22px;accent-color:#C2543E}
 </style>
 </head>
 <body>
