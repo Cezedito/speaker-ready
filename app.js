@@ -1,0 +1,647 @@
+/* Speaker Ready — application
+   Le contenu des leçons est dans lessons-q1.js … lessons-q4.js */
+(function(){
+"use strict";
+
+/* ===================== DONNÉES ===================== */
+var LESSONS=(window.LESSONS||[]).slice().sort(function(a,b){return a.w-b.w;});
+var BYW={};LESSONS.forEach(function(l){BYW[l.w]=l;});
+var WORDS=[],PHRASES=[];
+LESSONS.forEach(function(l){
+  l.v.forEach(function(v,i){WORDS.push({id:l.w+"-"+i,en:v[0],fr:v[1],ex:v[2],w:l.w});});
+  l.p.forEach(function(p){PHRASES.push({en:p[0],fr:p[1],w:l.w});});
+});
+var QNAMES={1:"Les bases pro",2:"Partenaires et logistique",3:"Presse et médical",4:"Aisance et nuances",5:"Marketing",6:"Anglais du quotidien au bureau"};
+var QSHORT={1:"Trimestre 1",2:"Trimestre 2",3:"Trimestre 3",4:"Trimestre 4",5:"Marketing",6:"Au quotidien"};
+var MAIN=LESSONS.filter(function(l){return l.q<=4;});
+function track(q){return LESSONS.filter(function(l){return l.q===q;});}
+function lnum(l){return l.q<=4?l.w:track(l.q).indexOf(l)+1;}
+function sibling(l,d){var t=track(l.q),k=t.indexOf(l)+d;return t[k]||null;}
+
+/* ===================== OUTILS ===================== */
+function $(s){return document.querySelector(s);}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];});}
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t;}return a;}
+function pad(n){return String(n).padStart(2,"0");}
+function dkey(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function today(){return dkey(new Date());}
+function pick(a){return a[Math.floor(Math.random()*a.length)];}
+function head(en){return en.split(" / ")[0].replace(/\s*\(.*\)$/,"").trim();}
+var SVG={
+ home:'<svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg>',
+ lessons:'<svg viewBox="0 0 24 24"><path d="M3 6.5C5.5 5 8.5 5 12 7c3.5-2 6.5-2 9-.5V19c-2.5-1.5-5.5-1.5-9 .5-3.5-2-6.5-2-9-.5z"/><path d="M12 7v12.5"/></svg>',
+ review:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="14" rx="3"/><path d="M7 3h11a3 3 0 0 1 3 3v11"/></svg>',
+ games:'<svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/><circle cx="17.5" cy="13.5" r=".6" fill="currentColor"/></svg>',
+ oral:'<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+ play:'<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z" fill="currentColor" stroke="none"/></svg>',
+ sound:'<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+ slow:'<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 12h4"/></svg>',
+ fire:'<svg viewBox="0 0 24 24"><path d="M12 21c4 0 6.5-2.6 6.5-6.2 0-4.3-3.8-6.6-4.6-10.3-2.3 1.6-3.4 4-3 6.3-1.1-.6-1.9-1.7-2.1-2.9C7 9.4 5.5 11.8 5.5 14.8 5.5 18.4 8 21 12 21z"/></svg>',
+ dice:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r="1" fill="currentColor"/><circle cx="15" cy="15" r="1" fill="currentColor"/><circle cx="15" cy="9" r="1" fill="currentColor"/><circle cx="9" cy="15" r="1" fill="currentColor"/></svg>'
+};
+
+/* ===================== ÉTAT ===================== */
+var KEY="congress-english:v3";
+var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{}};
+try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in S){if(o[k]!==undefined)S[k]=o[k];}}}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+save();
+function markToday(){var t=today();if(S.days.indexOf(t)<0){S.days.push(t);save();}}
+function streak(){var n=0,d=new Date();while(S.days.indexOf(dkey(d))>-1){n++;d.setDate(d.getDate()-1);}return n;}
+function valid(w){return (S.done[w]||0)>=4;}
+function doneCount(){return MAIN.filter(function(l){return valid(l.w);}).length;}
+function knownCount(){return WORDS.filter(function(w){return S.known[w.id];}).length;}
+function programWeek(){var s=new Date(S.start+"T00:00:00"),d=Math.floor((new Date()-s)/864e5);return Math.max(1,Math.min(52,Math.floor(d/7)+1));}
+function nextLesson(){for(var i=0;i<MAIN.length;i++){if(!valid(MAIN[i].w))return MAIN[i];}return null;}
+/* mots et phrases disponibles pour les jeux : leçons faites, sinon les premières leçons */
+function reach(){var n=nextLesson();var m=0;Object.keys(S.done).forEach(function(w){if(+w<=52)m=Math.max(m,+w);});return Math.max(3,m,n?n.w:52);}
+function poolWords(scope){
+  if(scope==="all")return WORDS.slice();
+  var d=WORDS.filter(function(w){return S.done[w.w]!==undefined;});
+  if(scope==="done")return d;
+  if(d.length>=12)return d;
+  var r=reach();return WORDS.filter(function(w){return w.w<=r||S.done[w.w]!==undefined;});
+}
+function poolPhrases(){
+  var d=PHRASES.filter(function(p){return S.done[p.w]!==undefined;});
+  if(d.length>=8)return d;
+  var r=reach();return PHRASES.filter(function(p){return p.w<=r||S.done[p.w]!==undefined;});
+}
+
+/* ===================== VOIX ===================== */
+var enVoice=null,HAS_TTS="speechSynthesis" in window;
+function pickVoice(){if(!HAS_TTS)return;var vs=speechSynthesis.getVoices();enVoice=vs.find(function(v){return /en-GB/i.test(v.lang);})||vs.find(function(v){return /^en/i.test(v.lang);})||null;}
+if(HAS_TTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
+function speak(t,rate){if(!HAS_TTS)return;speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang=enVoice?enVoice.lang:"en-GB";if(enVoice)u.voice=enVoice;u.rate=rate||.95;speechSynthesis.speak(u);}
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+
+/* ===================== NAVIGATION ===================== */
+var tab="home",route={lesson:null},quarterSel=null,overlay=null,timerId=null;
+var TABS=[["home","Accueil"],["lessons","Leçons"],["review","Révision"],["games","Jeux"],["oral","Oral"]];
+var TITLES={home:"Accueil",lessons:"Leçons",review:"Révision",games:"Mini-jeux",oral:"Prononciation"};
+function renderTabs(){
+  var box=$("#tabs");
+  if(!box.dataset.built){box.innerHTML='<span class="ind" id="ind" aria-hidden="true"></span>'+TABS.map(function(t){return '<button class="tab" data-tab="'+t[0]+'">'+SVG[t[0]]+'<span>'+t[1]+'</span></button>';}).join("");box.dataset.built="1";}
+  var idx=0;Array.prototype.forEach.call(box.querySelectorAll(".tab"),function(b,i){if(b.dataset.tab===tab){b.setAttribute("aria-current","page");idx=i;}else b.removeAttribute("aria-current");});
+  $("#ind").style.transform="translateX("+(idx*100)+"%)";
+}
+
+/* ===================== ACCUEIL ===================== */
+var GAMES=[
+ {id:"memory",n:"Paires",s:"Associe chaque mot anglais à sa traduction",best:function(v){return v+" coups";}},
+ {id:"chrono",n:"Vrai ou faux chrono",s:"60 secondes pour valider un max de traductions",best:function(v){return v+" points";}},
+ {id:"scramble",n:"Phrase en désordre",s:"Remets les mots dans le bon ordre",best:function(v){return v+" / 5";}},
+ {id:"dictee",n:"Dictée",s:"Écoute un mot et écris-le",best:function(v){return v+" / 8";}}
+];
+function gameOfDay(){var d=new Date(),start=new Date(d.getFullYear(),0,0);return GAMES[Math.floor((d-start)/864e5)%GAMES.length];}
+function renderHome(){
+  var dc=doneCount(),pct=Math.round(dc/52*100),wk=programWeek(),nx=nextLesson(),kc=knownCount(),st=streak(),gd=gameOfDay();
+  var pace=dc>wk?"Tu es en avance sur le programme. Bravo !":dc===wk?"Leçon de la semaine faite, tu es à jour.":(dc===wk-1?"Tu es pile dans le rythme : une leçon cette semaine.":"Tu as "+(wk-1-dc)+" leçon"+(wk-1-dc>1?"s":"")+" de retard, rien de grave : avance à ton rythme.");
+  var cq=nx?nx.q:4;
+  view.innerHTML=
+   '<div class="bento">'+
+    '<div class="tile navy span2"><div class="tag">Programme annuel · semaine '+wk+' / 52</div>'+
+      '<div class="hero-num"><b id="cnt" data-to="'+dc+'">'+dc+'</b><small>/ 52 leçons</small></div>'+
+      '<div><div class="meter"><i style="width:'+pct+'%"></i></div><div class="meter-legend"><span>Semaine 1</span><span>Semaine 52</span></div></div>'+
+      '<p>'+pace+'</p></div>'+
+    (nx?'<button class="tile cont span2" data-open="'+nx.w+'"><span class="ico cta">'+SVG.play+'</span><span class="txt"><span class="tag">Leçon '+nx.w+' · '+nx.lv+'</span><b>'+esc(nx.t)+'</b></span><span class="chev" aria-hidden="true"></span></button>'
+       :'<div class="tile span2"><b>Programme terminé !</b><span class="tag">Continue avec les jeux et la révision pour garder le niveau.</span></div>')+
+    '<div class="tile"><span class="ico">'+SVG.fire+'</span><div class="kpi">'+st+'<small>jour'+(st>1?"s":"")+'</small></div><div class="tag">Série en cours</div></div>'+
+    '<div class="tile"><span class="ico">'+SVG.review+'</span><div class="kpi">'+kc+'<small>/ '+WORDS.length+'</small></div><div class="tag">Mots maîtrisés</div></div>'+
+    '<button class="tile cont span2" data-loopmap="1"><span class="ico">'+SVG.dice+'</span><span class="txt"><span class="tag">Congress Loop · '+totalStars()+' ★</span><b>Continuer : monde '+currentLevel().w+', niveau '+currentLevel().i+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
+    '<button class="tile cont span2" data-game="'+gd.id+'"><span class="ico">'+SVG.games+'</span><span class="txt"><span class="tag">Jeu rapide du jour</span><b>'+gd.n+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
+   '</div>'+
+   '<h2>Parcours thématiques</h2><div class="stack">'+[5,6].map(function(q){var t=track(q),dn=t.filter(function(l){return valid(l.w);}).length,nx2=t.filter(function(l){return !valid(l.w);})[0];return '<button class="mod" data-quarter-open="'+q+'"><span class="num" style="font-size:13px">'+(q===5?'Mkt':'Bureau')+'</span><span><b>'+QNAMES[q]+'</b><span class="sub">'+(nx2?'Prochaine : '+esc(nx2.t):'Parcours terminé !')+'</span><span class="prog" style="display:block;margin-top:10px"><i style="width:'+Math.round(dn/t.length*100)+'%"></i></span><span class="sub" style="display:block;margin-top:6px;font-size:13px">'+dn+' / '+t.length+' leçons</span></span></button>';}).join('')+'</div>'+
+   '<h2>Trimestre '+cq+' · '+QNAMES[cq]+'</h2>'+lessonList(cq);
+  countUp();
+}
+function countUp(){
+  var el=$("#cnt");if(!el)return;var to=+el.dataset.to;
+  if(!to||(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches))return;
+  var t0=null;function step(t){if(!t0)t0=t;var k=Math.min(1,(t-t0)/900);el.textContent=Math.round(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(step);}requestAnimationFrame(step);
+}
+
+/* ===================== LEÇONS ===================== */
+function scorePill(w){var s=S.done[w];if(s===undefined)return "";return '<span class="pill '+(s>=4?"good":"warn")+'">'+s+' / 6</span>';}
+function lessonList(q){
+  var nx=nextLesson();
+  return '<div class="stack list">'+LESSONS.filter(function(l){return l.q===q;}).map(function(l){
+    var cls="les small nav"+(valid(l.w)?" done":"")+(nx&&nx.w===l.w?" cur":"");
+    return '<button class="'+cls+'" data-open="'+l.w+'"><span class="dot">'+lnum(l)+'</span><span><b>'+esc(l.t)+'</b><span class="fr">'+l.lv+' · '+esc(l.g.t)+'</span></span>'+(scorePill(l.w)||'<span></span>')+'</button>';
+  }).join("")+'</div>';
+}
+function renderLessons(){
+  if(route.lesson)return renderReader(BYW[route.lesson]);
+  var nx=nextLesson();if(!quarterSel)quarterSel=nx?nx.q:1;
+  var q=quarterSel,dq=LESSONS.filter(function(l){return l.q===q&&valid(l.w);}).length,tq=LESSONS.filter(function(l){return l.q===q;}).length;
+  view.innerHTML='<div class="chips">'+[5,6,1,2,3,4].map(function(i){return '<button class="chip'+(i===q?" on":"")+'" data-quarter="'+i+'">'+QSHORT[i]+'</button>';}).join("")+'</div>'+
+   '<div class="card" style="margin-bottom:14px"><div class="tag">'+QNAMES[q]+'</div><div style="display:flex;justify-content:space-between;align-items:baseline;margin:6px 0 10px"><b style="font-family:var(--f-display);font-size:22px">'+dq+' / '+tq+' leçons</b><span class="tag">'+LESSONS.filter(function(l){return l.q===q;})[0].lv+' → '+LESSONS.filter(function(l){return l.q===q;})[tq-1].lv+'</span></div><div class="prog"><i style="width:'+Math.round(dq/tq*100)+'%"></i></div></div>'+
+   lessonList(q);
+}
+function renderReader(l){
+  var prev=sibling(l,-1),next=sibling(l,1);
+  view.innerHTML='<div class="reader"><button class="back" data-back="1">‹ Leçons</button>'+
+   '<div class="kick">'+(l.q<=4?'Semaine '+l.w+' · Niveau '+l.lv+' · Trimestre '+l.q:'Parcours '+QNAMES[l.q]+' · Leçon '+lnum(l)+' · '+l.lv)+'</div><h1>'+esc(l.t)+'</h1>'+(scorePill(l.w)?'<div style="margin-top:6px">'+scorePill(l.w)+'</div>':'')+
+   '<h2>Vocabulaire</h2><div class="stack list">'+l.v.map(function(v,i){var id=l.w+"-"+i;
+     return '<button class="les" data-say="'+esc(v[0])+'"><span class="ico">'+SVG.sound+'</span><span><b>'+esc(v[0])+'</b><span class="fr">'+esc(v[1])+'</span><span class="ex">'+esc(v[2])+'</span></span>'+(S.known[id]?'<span class="pill good">Su</span>':'<span></span>')+'</button>';}).join("")+'</div>'+
+   '<h2>Grammaire</h2><div class="box key"><span class="lab">Point de grammaire</span><h3>'+esc(l.g.t)+'</h3><p>'+esc(l.g.x)+'</p>'+
+     l.g.e.map(function(e){return '<button class="gex" data-say="'+esc(e[0])+'"><span class="ico">'+SVG.sound+'</span><span><b>'+esc(e[0])+'</b><span class="fr">'+esc(e[1])+'</span></span></button>';}).join("")+'</div>'+
+   '<h2>Phrases utiles</h2><div class="stack list">'+l.p.map(function(p){
+     return '<button class="les" data-say="'+esc(p[0])+'"><span class="ico">'+SVG.sound+'</span><span><b>'+esc(p[0])+'</b><span class="fr">'+esc(p[1])+'</span></span><span></span></button>';}).join("")+'</div>'+
+   '<div class="box ex" style="margin-top:20px"><span class="lab">Astuce métier</span><p>'+esc(l.tip)+'</p></div>'+
+   '<div class="actions"><button class="btn primary" data-lquiz="'+l.w+'">'+(S.done[l.w]!==undefined?"Refaire le quiz de la leçon":"Valider la leçon")+' · 6 questions</button></div>'+
+   '<div class="readnav"><button class="btn" data-open="'+(prev?prev.w:"")+'"'+(prev?"":" disabled")+'>‹ Leçon '+(prev?lnum(prev):"")+'</button><button class="btn" data-open="'+(next?next.w:"")+'"'+(next?"":" disabled")+'>Leçon '+(next?lnum(next):"")+' ›</button></div></div>';
+}
+
+/* ===================== MOTEUR DE QUIZ ===================== */
+function others(list,item,key,n){var seen={};seen[item[key].toLowerCase()]=1;var out=[];shuffle(list).forEach(function(x){var t=x[key].toLowerCase();if(out.length<n&&!seen[t]){seen[t]=1;out.push(x);}});return out;}
+function mcq(prompt,hint,item,list,key,say,explain){
+  var opts=shuffle([item].concat(others(list,item,key,3)));
+  return {p:prompt,h:hint,o:opts.map(function(x){return x[key];}),a:opts.indexOf(item),say:say,ex:explain};
+}
+function qEnFr(w,list){return mcq("Que veut dire « "+w.en+" » ?","Choisis la bonne traduction.",w,list,"fr",w.en,'<b>'+esc(w.en)+'</b> : '+esc(w.fr)+'<br><i class="muted">« '+esc(w.ex)+' »</i>');}
+function qFrEn(w,list){return mcq("Comment dit-on « "+w.fr+" » ?","Choisis le mot anglais.",w,list,"en",w.en,'<b>'+esc(w.en)+'</b> : '+esc(w.fr)+'<br><i class="muted">« '+esc(w.ex)+' »</i>');}
+function qBlank(w,list){
+  var h=head(w.en).replace(/^to /,"");var re=new RegExp("\\b"+h.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\b","i");
+  if(!re.test(w.ex))return null;
+  var item={t:h},cands=list.map(function(x){return {t:head(x.en).replace(/^to /,"")};});
+  var opts=shuffle([item].concat(others(cands,item,"t",3)));
+  return {p:w.ex.replace(re,"_____"),h:"Complète la phrase.",o:opts.map(function(x){return x.t;}),a:opts.indexOf(item),say:w.ex,ex:'<b>'+esc(w.ex)+'</b><br><span class="muted">'+esc(h)+' = '+esc(w.fr)+'</span>'};
+}
+function qPhrase(p,list){return mcq("Comment dire : « "+p.fr+" » ?","Choisis la bonne phrase.",p,list,"en",p.en,'<b>'+esc(p.en)+'</b>');}
+function lessonQuiz(w){
+  var l=BYW[w],ws=WORDS.filter(function(x){return x.w===w;}),sw=shuffle(ws);
+  var qs=[qEnFr(sw[0],WORDS),qEnFr(sw[1],WORDS),qFrEn(sw[2],WORDS),qFrEn(sw[3],WORDS)];
+  var b=null;for(var i=4;i<sw.length&&!b;i++)b=qBlank(sw[i],WORDS);
+  qs.push(b||qEnFr(sw[4],WORDS));
+  var ps=PHRASES.filter(function(p){return p.w===w;});qs.push(qPhrase(pick(ps),PHRASES));
+  return {kind:"lesson",w:w,title:"Leçon "+lnum(l),qs:shuffle(qs),pos:0,res:[],locked:false,picked:null,done:false};
+}
+function reviewQuiz(){
+  var pool=poolWords(),sw=shuffle(pool).slice(0,10);
+  var qs=sw.map(function(w,i){if(i%3===2){var b=qBlank(w,WORDS);if(b)return b;}return i%2?qFrEn(w,WORDS):qEnFr(w,WORDS);});
+  return {kind:"review",title:"Révision",qs:qs,pos:0,res:[],locked:false,picked:null,done:false};
+}
+function renderQuiz(){
+  var z=overlay.q;if(z.done)return renderQuizResult();
+  var q=z.qs[z.pos],L="ABCD",n=z.qs.length;
+  var segs='<div class="segs">'+z.qs.map(function(_,i){var c=i<z.res.length?(z.res[i]?"ok":"ko"):(i===z.pos?"cur":"");return '<i class="'+c+'"></i>';}).join("")+'</div>';
+  var opts=q.o.map(function(o,i){var cls="opt",dis="";
+    if(z.locked){dis=" disabled";if(i===q.a)cls+=" ok";else if(i===z.picked)cls+=" ko";}
+    return '<button class="'+cls+'" data-opt="'+i+'"'+dis+'><span class="l">'+L[i]+'</span><span>'+esc(o)+'</span></button>';}).join("");
+  var fb="";
+  if(z.locked){var ok=z.picked===q.a;
+    fb='<div class="feedback '+(ok?"good":"bad")+'"><b class="v">'+(ok?"Exact !":"Pas tout à fait")+'</b><p>'+q.ex+'</p></div>'+
+       '<div class="actions"><button class="btn primary" data-qnext="1">'+(z.pos<n-1?"Question suivante":"Voir mon score")+'</button></div>';}
+  view.innerHTML='<div class="qbar"><button class="back" data-quit="1">‹ Quitter</button><span class="tag">'+esc(z.title)+' · '+(z.pos+1)+' / '+n+'</span></div>'+segs+
+    '<div class="qtext">'+esc(q.p)+'</div><div class="qhint">'+esc(q.h)+'</div><div class="opts">'+opts+'</div>'+fb;
+}
+function renderQuizResult(){
+  var z=overlay.q,n=z.qs.length,s=z.res.filter(Boolean).length,pct=Math.round(s/n*100);
+  var msg=pct>=80?"Excellent, c'est acquis.":pct>=60?"C'est validé. Repasse sur les points ratés quand tu veux.":pct>=50?"Bonne base. Relis la leçon et refais le quiz.":"On s'accroche : relis la leçon, puis réessaie.";
+  var wrong=z.qs.filter(function(_,i){return !z.res[i];});
+  var nx=z.kind==="lesson"?sibling(BYW[z.w],1):null;
+  view.innerHTML='<div class="qbar"><button class="back" data-quit="1">‹ Terminer</button><span class="tag">'+esc(z.title)+'</span></div>'+
+   '<div class="card score" style="margin-top:8px"><div class="tag">'+(z.kind==="lesson"?(s>=4?"Leçon validée":"Pas encore validée · 4 / 6 pour valider"):"Révision terminée")+'</div><div class="big"><b>'+s+'</b><small>/ '+n+'</small></div>'+
+   '<div class="meter"><i style="width:'+pct+'%"></i></div><p style="margin:10px 0 0">'+msg+'</p></div>'+
+   (wrong.length?'<h2>À retravailler</h2><div class="stack list">'+wrong.map(function(q){return '<button class="les" data-say="'+esc(q.say)+'"><span class="ico">'+SVG.sound+'</span><span><b>'+esc(q.o[q.a])+'</b><span class="fr">'+esc(q.p)+'</span></span><span></span></button>';}).join("")+'</div>':'')+
+   '<div class="actions">'+(nx&&s>=4&&z.kind==="lesson"?'<button class="btn primary" data-open="'+nx.w+'">Leçon suivante : '+esc(nx.t)+'</button>':'')+
+   '<button class="btn'+(nx&&s>=4&&z.kind==="lesson"?"":" primary")+'" data-again="1">Recommencer</button><button class="btn" data-quit="1">Retour</button></div>';
+}
+function finishQuiz(){
+  var z=overlay.q,s=z.res.filter(Boolean).length;z.done=true;markToday();
+  if(z.kind==="lesson"){S.done[z.w]=Math.max(S.done[z.w]===undefined?0:S.done[z.w],s);}
+  else if(S.best===null||s>S.best)S.best=s;
+  save();
+}
+
+/* ===================== RÉVISION ===================== */
+var R={scope:"auto",onlyNew:false,deck:[],pos:0,flipped:false};
+function buildDeck(){
+  var base=R.scope==="all"?poolWords("all"):poolWords();
+  R.deck=shuffle(base.filter(function(w){return !R.onlyNew||!S.known[w.id];}));R.pos=0;R.flipped=false;
+}
+function renderReview(){
+  var dc=doneCount();
+  var chips='<div class="chips"><button class="chip'+(R.scope==="auto"?" on":"")+'" data-scope="auto">'+(dc?"Mes leçons":"Premières leçons")+'</button><button class="chip'+(R.scope==="all"?" on":"")+'" data-scope="all">Tout le programme</button><button class="chip'+(R.onlyNew?" on":"")+'" data-onlynew="1">À revoir</button></div>';
+  var quizBtn='<div class="actions"><button class="btn primary" data-rquiz="1">Quiz de révision · 10 questions</button>'+(S.best!==null?'<p class="tag center" style="margin:0">Meilleur score : '+S.best+' / 10</p>':'')+'</div>';
+  if(!R.deck.length){view.innerHTML=chips+'<div class="card center" style="padding:40px 20px"><div class="qtext" style="margin-top:0">Bravo !</div><p class="muted">Tous les mots de cette sélection sont maîtrisés.</p></div>'+quizBtn;return;}
+  var w=R.deck[R.pos%R.deck.length],known=S.known[w.id];
+  var face=R.flipped
+    ?'<button class="flash navy flip" data-flip="1"><span class="lab">Leçon '+w.w+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
+    :'<button class="card flash" data-flip="1"><span class="pill '+(known?"good":"neutral")+'">'+(known?"Maîtrisé":"Leçon "+w.w)+'</span><span class="term">'+esc(w.en)+'</span><span class="hint">Touche pour voir la traduction</span></button>';
+  view.innerHTML=chips+face+
+    '<div class="counter">Carte '+(R.pos%R.deck.length+1)+' / '+R.deck.length+'</div>'+
+    '<div class="row3"><button class="btn" data-say="'+esc(w.en)+'" aria-label="Écouter">'+SVG.sound+'</button><button class="btn" data-mark="0">À revoir</button><button class="btn primary" data-mark="1">Je connais</button></div>'+quizBtn;
+}
+
+/* ===================== MINI-JEUX ===================== */
+function renderGames(){
+  var src=doneCount()?"Les jeux piochent dans les mots des leçons que tu as faites.":"Les jeux piochent d'abord dans les premières leçons, puis suivent ta progression.";
+  var cl=currentLevel(),ts=totalStars();
+  view.innerHTML='<button class="tile navy loopcard" data-loopmap="1"><span class="tag">Jeu à niveaux · '+(WORLDS.length*LV_PER_WORLD)+' niveaux</span><span class="lt">Congress Loop</span><span class="ld">Sers les bonnes commandes avant que le plateau déborde.</span>'+
+   '<span class="lstats"><span><b>'+cl.w+'-'+cl.i+'</b><span>niveau</span></span><span><b>'+ts+'</b><span>étoiles</span></span><span><b>'+S.loop.coins+'</b><span>pièces</span></span></span><span class="btn primary">'+SVG.play+' Jouer</span></button>'+
+   '<h2>Jeux rapides</h2><div class="card" style="margin-bottom:12px"><p style="margin:0">'+src+'</p></div><div class="stack">'+GAMES.map(function(g,i){
+    var b=S.games[g.id];
+    return '<button class="mod" data-game="'+g.id+'"><span class="num">'+(i+1)+'</span><span><b>'+g.n+'</b><span class="sub">'+g.s+'</span>'+(b!==undefined?'<span style="display:block;margin-top:8px"><span class="pill good">Record : '+g.best(b)+'</span></span>':'')+'</span></button>';}).join("")+'</div>';
+}
+function startGame(id){
+  stopTimer();
+  if(id==="memory"){
+    var ws=shuffle(poolWords()).slice(0,6),cards=[];
+    ws.forEach(function(w){cards.push({id:w.id,t:head(w.en),fr:false,w:w});cards.push({id:w.id,t:w.fr,fr:true,w:w});});
+    overlay={type:"game",g:{id:id,cards:shuffle(cards),up:[],matched:{},moves:0,busy:false,done:false}};
+  }else if(id==="chrono"){
+    overlay={type:"game",g:{id:id,score:0,total:0,end:Date.now()+60000,cur:null,flash:null,done:false}};
+    chronoNext();startTimer();
+  }else if(id==="scramble"){
+    var ps=shuffle(poolPhrases().filter(function(p){return p.en.split(" ").length<=12;})).slice(0,5);
+    overlay={type:"game",g:{id:id,list:ps,pos:0,score:0,built:[],bank:[],checked:null,done:false}};
+    scrambleSetup();
+  }else if(id==="dictee"){
+    var dw=shuffle(poolWords().filter(function(w){var h=head(w.en);return h.length>=3&&h.split(" ").length<=2&&!/[()]/.test(h);})).slice(0,8);
+    overlay={type:"game",g:{id:id,list:dw,pos:0,score:0,checked:null,hint:false,val:"",done:false}};
+    setTimeout(function(){if(overlay&&overlay.g&&overlay.g.id==="dictee")speak(head(dw[0].en),.85);},400);
+  }
+}
+function stopTimer(){if(timerId){clearInterval(timerId);timerId=null;}}
+function startTimer(){timerId=setInterval(function(){
+  if(!overlay||!overlay.g||overlay.g.id!=="chrono"){stopTimer();return;}
+  var g=overlay.g,left=Math.max(0,Math.ceil((g.end-Date.now())/1000));
+  if(left<=0){stopTimer();g.done=true;gameRecord("chrono",g.score,true);render();return;}
+  var el=$("#tleft");if(el){el.textContent=left+" s";el.classList.toggle("low",left<=10);}
+},250);}
+function gameRecord(id,v,higher){
+  markToday();var b=S.games[id];
+  var better=b===undefined||(higher?v>b:v<b);
+  if(better){S.games[id]=v;save();}
+  overlay.g.record=better;
+}
+function gameHeader(g,extra){
+  var name=GAMES.filter(function(x){return x.id===g.id;})[0].n;
+  return '<div class="gamebar"><button class="back" data-quit="1">‹ Quitter</button><div class="gstat">'+extra+'</div></div><div class="qtext" style="margin-top:4px">'+name+'</div>';
+}
+function gameEnd(g,big,small,msg){
+  var gm=GAMES.filter(function(x){return x.id===g.id;})[0];
+  view.innerHTML='<div class="gamebar"><button class="back" data-quit="1">‹ Terminer</button><span class="tag">'+gm.n+'</span></div>'+
+   '<div class="card score" style="margin-top:8px"><div class="tag">'+(g.record?"Nouveau record !":"Partie terminée")+'</div><div class="big"><b>'+big+'</b><small>'+small+'</small></div><p style="margin:10px 0 0">'+msg+'</p>'+
+   (S.games[g.id]!==undefined?'<p class="tag" style="margin:6px 0 0">Record : '+gm.best(S.games[g.id])+'</p>':'')+'</div>'+
+   '<div class="actions"><button class="btn primary" data-game="'+g.id+'">Rejouer</button><button class="btn" data-quit="1">Retour aux jeux</button></div>';
+}
+/* Paires */
+function renderMemory(g){
+  if(g.done)return gameEnd(g,g.moves,"coups","6 paires trouvées. Moins de coups = meilleur score.");
+  var found=Object.keys(g.matched).length;
+  view.innerHTML=gameHeader(g,'<span class="pill">'+found+' / 6 paires</span><span class="pill neutral">'+g.moves+' coups</span>')+
+   '<div class="qhint">Retourne deux cartes : un mot anglais et sa traduction.</div>'+
+   '<div class="memgrid">'+g.cards.map(function(c,i){
+     var up=g.up.indexOf(i)>-1,m=g.matched[c.id],cls="mc"+(m?" ok":up?" up"+(c.fr?" fr":""):"")+(g.wrong&&up?" no":"");
+     return '<button class="'+cls+'" data-mc="'+i+'"'+(m?" disabled":"")+'>'+(up||m?esc(c.t):'<span class="q">?</span>')+'</button>';}).join("")+'</div>';
+}
+function memoryTap(i){
+  var g=overlay.g;if(g.busy||g.up.indexOf(i)>-1||g.matched[g.cards[i].id])return;
+  var c=g.cards[i];if(!c.fr)speak(c.t);
+  g.up.push(i);
+  if(g.up.length===2){
+    g.moves++;var a=g.cards[g.up[0]],b=g.cards[g.up[1]];
+    if(a.id===b.id&&a.fr!==b.fr){g.matched[a.id]=1;g.up=[];if(Object.keys(g.matched).length===6){g.done=true;gameRecord("memory",g.moves,false);}}
+    else{g.busy=true;g.wrong=true;setTimeout(function(){if(!overlay||overlay.g!==g)return;g.up=[];g.busy=false;g.wrong=false;render();},850);}
+  }
+  render();
+}
+/* Vrai ou faux chrono */
+function chronoNext(){
+  var g=overlay.g,pool=poolWords(),w=pick(pool),truth=Math.random()<.5,shown=w.fr;
+  if(!truth){var o=others(pool.length>4?pool:WORDS,w,"fr",1)[0];shown=o.fr;}
+  g.cur={w:w,fr:shown,truth:truth};
+}
+function renderChrono(g){
+  if(g.done)return gameEnd(g,g.score,"points",g.total?(g.score+" bonnes réponses sur "+g.total+"."):"Le temps est écoulé !");
+  var left=Math.max(0,Math.ceil((g.end-Date.now())/1000));
+  view.innerHTML=gameHeader(g,'<span class="pill good">'+g.score+' pts</span><span class="timer'+(left<=10?" low":"")+'" id="tleft">'+left+' s</span>')+
+   '<div class="qhint">La traduction est-elle correcte ?</div>'+
+   '<div class="card chrono-card'+(g.flash?" flash-"+g.flash:"")+'"><div class="w1">'+esc(g.cur.w.en)+'</div><div class="eq">veut dire</div><div class="w2">'+esc(g.cur.fr)+'</div></div>'+
+   '<div class="row2" style="margin-top:16px"><button class="btn" data-tf="0" style="min-height:64px">✗ Faux</button><button class="btn primary" data-tf="1" style="min-height:64px">✓ Vrai</button></div>';
+}
+function chronoAnswer(v){
+  var g=overlay.g;if(g.done)return;g.total++;
+  var ok=(v===1)===g.cur.truth;if(ok)g.score++;
+  g.flash=ok?"ok":"ko";chronoNext();render();
+  setTimeout(function(){if(overlay&&overlay.g===g){g.flash=null;var c=$(".chrono-card");if(c)c.classList.remove("flash-ok","flash-ko");}},300);
+}
+/* Phrase en désordre */
+function toks(s){return s.split(" ");}
+function scrambleSetup(){
+  var g=overlay.g,p=g.list[g.pos],t=toks(p.en),b;
+  var tries=0;do{b=shuffle(t.map(function(x,i){return {t:x,i:i};}));tries++;}while(tries<10&&b.map(function(x){return x.t;}).join(" ")===p.en);
+  g.bank=b;g.built=[];g.checked=null;
+}
+function renderScramble(g){
+  if(g.done)return gameEnd(g,g.score,"/ 5","Phrases reconstituées sans erreur.");
+  var p=g.list[g.pos];
+  var built=g.built.map(function(k,j){return '<button class="tok in" data-unb="'+j+'"'+(g.checked?" disabled":"")+'>'+esc(g.bank[k].t)+'</button>';}).join("");
+  var bank=g.bank.map(function(x,k){return g.built.indexOf(k)>-1?'':'<button class="tok" data-tok="'+k+'">'+esc(x.t)+'</button>';}).join("");
+  var fb="";
+  if(g.checked){var ok=g.checked==="ok";fb='<div class="feedback '+(ok?"good":"bad")+'"><b class="v">'+(ok?"Parfait !":"Presque…")+'</b><p><b>'+esc(p.en)+'</b></p></div><div class="actions"><button class="btn primary" data-snext="1">'+(g.pos<g.list.length-1?"Phrase suivante":"Voir mon score")+'</button></div>';}
+  view.innerHTML=gameHeader(g,'<span class="pill">'+(g.pos+1)+' / '+g.list.length+'</span><span class="pill good">'+g.score+' ✓</span>')+
+   '<div class="qhint">« '+esc(p.fr)+' »</div><div class="build">'+built+'</div><div class="bank">'+bank+'</div>'+
+   (g.checked?fb:'<div class="actions"><button class="btn primary" data-scheck="1"'+(g.built.length===g.bank.length?"":" disabled")+'>Vérifier</button></div>');
+}
+/* Dictée */
+function normW(s){return s.toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9' -]/g,"").replace(/\s+/g," ").trim();}
+function renderDictee(g){
+  if(g.done)return gameEnd(g,g.score,"/ "+g.list.length,"Mots écrits sans faute.");
+  var w=g.list[g.pos],h=head(w.en),fb="";
+  if(g.checked){var ok=g.checked==="ok";fb='<div class="feedback '+(ok?"good":"bad")+'"><b class="v">'+(ok?"Bien joué !":"Ce n'est pas ça")+'</b><p><b>'+esc(h)+'</b> : '+esc(w.fr)+'</p></div><div class="actions"><button class="btn primary" data-dnext="1">'+(g.pos<g.list.length-1?"Mot suivant":"Voir mon score")+'</button></div>';}
+  view.innerHTML=gameHeader(g,'<span class="pill">'+(g.pos+1)+' / '+g.list.length+'</span><span class="pill good">'+g.score+' ✓</span>')+
+   (HAS_TTS?'':'<div class="note">La lecture audio n’est pas disponible sur ce navigateur : écris le mot anglais qui correspond à la traduction.</div>')+
+   '<div class="card center" style="margin-top:10px">'+(HAS_TTS?'<button class="bigplay" data-dsay="1" aria-label="Écouter le mot">'+SVG.sound+'</button><div class="row2" style="margin:10px 0 0"><button class="btn" data-dslow="1">'+SVG.slow+' Lentement</button><button class="btn" data-dhint="1">Indice</button></div>':'')+
+   ((g.hint||!HAS_TTS)?'<p class="muted" style="margin:14px 0 0">Traduction : <b>'+esc(w.fr)+'</b></p>':'')+'</div>'+
+   '<form id="dform" style="margin-top:14px"><input class="field" id="dinput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Écris ce que tu entends" value="'+esc(g.val)+'"'+(g.checked?" disabled":"")+'>'+
+   (g.checked?'':'<div class="actions"><button class="btn primary" type="submit">Vérifier</button></div>')+'</form>'+fb;
+  if(!g.checked){var inp=$("#dinput");if(inp&&!("ontouchstart" in window))inp.focus();}
+}
+
+/* ===================== ORAL ===================== */
+var O={cur:null,listening:false,heard:null,err:null};
+function nextPhrase(){var pool=poolPhrases(),c;do{c=pick(pool);}while(O.cur&&c===O.cur&&pool.length>1);O.cur=c;O.heard=null;O.err=null;}
+function norm(s){return s.toLowerCase().replace(/[’]/g,"'").replace(/[^a-z0-9' ]/g," ").split(/\s+/).filter(Boolean);}
+function renderOral(){
+  if(!O.cur)nextPhrase();
+  var c=O.cur,res="";
+  if(O.heard){
+    var t=norm(c.en),hs={};norm(O.heard).forEach(function(w){hs[w]=1;});
+    var hits=t.filter(function(w){return hs[w];}).length,pct=Math.round(hits/t.length*100);
+    var v=pct>=85?["good","Excellent !"]:pct>=60?["","Pas mal"]:["bad","On réessaie"];
+    res='<div class="feedback '+v[0]+'"><b class="v">'+v[1]+' · '+pct+' %</b><div class="heard">'+t.map(function(w){return '<span class="'+(hs[w]?"hit":"miss")+'">'+esc(w)+'</span>';}).join(" ")+'</div><p class="muted" style="margin-top:8px">Entendu : « '+esc(O.heard)+' »</p></div>';
+  }
+  view.innerHTML=(SR?'':'<div class="note">La reconnaissance vocale n’est pas disponible sur ce navigateur. Utilise Chrome, ou Safari récent. L’écoute fonctionne quand même.</div>')+
+   (O.err?'<div class="note">'+esc(O.err)+'</div>':'')+
+   '<div class="card speak"><span class="pill">Leçon '+c.w+' · '+esc(BYW[c.w].t)+'</span><div class="phrase">'+esc(c.en)+'</div><p class="muted" style="margin:0">'+esc(c.fr)+'</p></div>'+
+   '<div class="row2" style="margin-top:12px"><button class="btn" data-say="'+esc(c.en)+'">'+SVG.sound+' Écouter</button><button class="btn" data-oslow="1">'+SVG.slow+' Lentement</button></div>'+
+   '<div class="actions" style="margin-top:12px"><button class="btn primary'+(O.listening?" rec-on":"")+'" data-rec="1"'+(SR&&!O.listening?"":" disabled")+'>'+SVG.oral+(O.listening?" J’écoute…":" À toi de répéter")+'</button></div>'+
+   res+'<div class="actions"><button class="btn" data-nextphrase="1">Autre phrase</button></div>';
+}
+function listen(){
+  var rec=new SR();rec.lang="en-GB";rec.interimResults=false;rec.maxAlternatives=1;
+  O.listening=true;O.err=null;render();
+  rec.onresult=function(e){O.heard=e.results[0][0].transcript;markToday();};
+  rec.onerror=function(e){O.listening=false;O.err="Micro indisponible ("+e.error+"). Autorise l’accès au micro dans le navigateur.";render();};
+  rec.onend=function(){if(!O.listening)return;O.listening=false;render();};
+  try{rec.start();}catch(err){O.listening=false;render();}
+}
+
+
+/* ===================== CONGRESS LOOP (jeu à niveaux) =====================
+   Des mots anglais défilent sur un tapis roulant. Chaque marmite affiche une commande
+   en français : touche le bon mot pour la servir. Un mot touché sans marmite
+   correspondante part sur le plateau d'attente. Plateau plein ou temps écoulé : perdu. */
+var WORLDS=[
+ {n:"Accueil & inscriptions",s:"Monde 1"},
+ {n:"Expo & partenaires",s:"Monde 2"},
+ {n:"Salle de presse",s:"Monde 3"},
+ {n:"Grande plénière",s:"Monde 4"},
+ {n:"Agence marketing",s:"Monde Marketing",bonus:true},
+ {n:"Open space",s:"Monde Bureau",bonus:true}
+];
+var LV_PER_WORLD=15;
+if(!S.loop||typeof S.loop!=="object")S.loop={};
+if(!S.loop.lv)S.loop.lv={};
+if(S.loop.coins===undefined)S.loop.coins=0;
+if(!S.loop.b)S.loop.b={hint:2,freeze:2,slot:2};
+if(S.loop.mute===undefined)S.loop.mute=false;
+var loopWorld=null,loopMap=false,rafId=null;
+var BOOST={hint:{n:"Indice",p:30,d:"Montre le bon mot"},freeze:{n:"Gel",p:40,d:"Stoppe le tapis et le chrono 6 s"},slot:{n:"Case",p:50,d:"Une case de plus sur le plateau"}};
+var BSVG={
+ hint:'<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>',
+ freeze:'<svg viewBox="0 0 24 24"><path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9 4l3 2 3-2M9 20l3-2 3 2"/></svg>',
+ slot:'<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M12 9.5v5M9.5 12h5"/></svg>',
+ sound:'<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>',
+ mute:'<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
+ lock:'<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+ coin:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M14.5 9.5c-.4-.9-1.4-1.5-2.5-1.5-1.5 0-2.5.8-2.5 2s1 1.6 2.5 2 2.5.8 2.5 2-1 2-2.5 2c-1.2 0-2.2-.6-2.6-1.6"/></svg>'
+};
+var POT='<svg class="potsvg" viewBox="0 0 64 46" aria-hidden="true"><path class="steam" d="M22 10c-3-3 3-5 0-9M32 10c-3-3 3-5 0-9M42 10c-3-3 3-5 0-9"/><rect x="6" y="15" width="52" height="6" rx="3" class="rim"/><path d="M10 21h44v9c0 8-6 13-14 13H24c-8 0-14-5-14-13z" class="body"/><path d="M4 24h6M54 24h6" class="rim-s"/></svg>';
+
+function lvKey(w,i){return w+"-"+i;}
+function lvStars(w,i){return S.loop.lv[lvKey(w,i)]||0;}
+function lvUnlocked(w,i){if((w===1||w>=5)&&i===1)return true;if(i>1)return lvStars(w,i-1)>0;return lvStars(w-1,LV_PER_WORLD)>0;}
+function totalStars(){var t=0;for(var k in S.loop.lv)t+=S.loop.lv[k];return t;}
+function currentLevel(){for(var w=1;w<=4;w++)for(var i=1;i<=LV_PER_WORLD;i++){if(!lvStars(w,i))return {w:w,i:i};}return {w:4,i:LV_PER_WORLD};}
+function lvCfg(w,i){
+  var ls=LESSONS.filter(function(l){return l.q===w;});
+  var upto=Math.max(2,Math.ceil(i*ls.length/LV_PER_WORLD));
+  var weeks=ls.slice(0,upto).map(function(l){return l.w;});
+  var mode=(i%5===0)?"reverse":(i%5===3&&i>3&&HAS_TTS)?"audio":"normal";
+  var d=w>=5?2:w;
+  var orders=6+Math.floor(i/2)+(d-1);
+  var pots=d===1?(i<5?2:3):d===2?3:d===3?(i<8?3:4):4;
+  var distract=d===1?(i<6?0:2):d+1;
+  var per=d===1?10:d===2?8.5:d===3?7.5:6.5;
+  return {w:w,i:i,weeks:weeks,mode:mode,orders:orders,pots:pots,distract:distract,
+    speed:34+i*2.5+(d-1)*8,tray:d>=3?4:5,time:Math.round(orders*per+(mode==="audio"?orders*2.5:0)+(mode==="reverse"?orders*1.5:0))};
+}
+function pickDistinct(pool,n,avoid){
+  var seenE={},seenF={},out=[];
+  (avoid||[]).forEach(function(x){seenE[head(x.en).toLowerCase()]=1;seenF[x.fr.toLowerCase()]=1;});
+  shuffle(pool).forEach(function(x){var e=head(x.en).toLowerCase(),f=x.fr.toLowerCase();if(out.length<n&&!seenE[e]&&!seenF[f]){seenE[e]=seenF[f]=1;out.push(x);}});
+  return out;
+}
+function startLoop(w,i){
+  stopRaf();
+  var c=lvCfg(w,i),pool=WORDS.filter(function(x){return c.weeks.indexOf(x.w)>-1;});
+  var orders=pickDistinct(pool,c.orders);
+  if(orders.length<c.orders)orders=orders.concat(pickDistinct(WORDS,c.orders-orders.length,orders));
+  var dis=pickDistinct(WORDS.filter(function(x){return w>=5?track(w).some(function(l){return l.w===x.w;}):x.w<=Math.max.apply(null,c.weeks)+3;}),c.distract,orders);
+  var items=shuffle(orders.map(function(x){return {word:x,order:true};}).concat(dis.map(function(x){return {word:x,order:false};})));
+  items.forEach(function(it,k){it.id=k;it.state="queue";});
+  var G={w:w,i:i,c:c,orders:orders,q:0,pots:[],items:items,tray:[],cap:c.tray,mistakes:0,combo:0,maxCombo:0,score:0,
+    served:0,missed:{},status:"play",reason:"",tLeft:c.time,begun:false};
+  overlay={type:"loop",G:G};
+}
+
+/* sons */
+var AC=null;
+function tone(fs,dur,type,vol,gap){
+  if(S.loop.mute)return;
+  try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();
+    var t=AC.currentTime;fs.forEach(function(f,k){var o=AC.createOscillator(),g=AC.createGain();o.type=type||"sine";o.frequency.value=f;
+      var st=t+k*(gap||dur);g.gain.setValueAtTime(0,st);g.gain.linearRampToValueAtTime(vol||.12,st+.01);g.gain.exponentialRampToValueAtTime(.0001,st+dur);
+      o.connect(g);g.connect(AC.destination);o.start(st);o.stop(st+dur+.02);});}catch(e){}
+}
+var sfx={
+  ok:function(c){tone([587+c*45,880+c*55],.09,"sine",.14);},
+  store:function(){tone([392],.08,"triangle",.08);},
+  bad:function(){tone([196,147],.12,"square",.05);},
+  win:function(){tone([523,659,784,1047],.14,"triangle",.14,.11);},
+  lose:function(){tone([392,311,233],.18,"sawtooth",.05,.15);},
+  pop:function(){tone([1200],.05,"sine",.06);}
+};
+function buzz(p){try{if(navigator.vibrate)navigator.vibrate(p);}catch(e){}}
+
+/* pont entre l'appli et la scène Phaser (loop-phaser.js) */
+var loopGame=null;
+function stopRaf(){if(loopGame){try{loopGame.destroy(true);}catch(e){}loopGame=null;}var st=document.getElementById("loopstage");if(st)st.remove();}
+var loopApi={
+  speak:function(w,r){var audio=overlay&&overlay.G&&overlay.G.c.mode==="audio";if(!S.loop.mute||audio)speak(head(w.en),r||1);},
+  head:function(w){return head(w.en);},
+  muted:function(){return !!S.loop.mute;},
+  worldName:function(w){return WORLDS[w-1].s;},
+  boostCount:function(b){return S.loop.b[b]||0;},
+  boost:function(b){if((S.loop.b[b]||0)<=0)return false;S.loop.b[b]--;save();return true;},
+  win:function(G){
+    G.status="won";
+    var stars=G.mistakes===0?3:G.mistakes<=2?2:1,prev=lvStars(G.w,G.i);
+    G.stars=stars;G.newBest=stars>prev;if(stars>prev)S.loop.lv[lvKey(G.w,G.i)]=stars;
+    G.coins=10+stars*10+G.maxCombo*2+Math.round(Math.max(0,G.tLeft)/5);S.loop.coins+=G.coins;
+    markToday();save();return {stars:stars,coins:G.coins};
+  },
+  lose:function(G,reason){G.status="lost";G.reason=reason;markToday();save();},
+  showResult:function(){stopRaf();render();window.scrollTo(0,0);},
+  quit:function(){stopRaf();overlay=null;tab="games";loopMap=true;render();window.scrollTo(0,0);}
+};
+function renderLoop(){
+  var G=overlay.G;
+  if(G.status==="won")return renderLoopWin(G);
+  if(G.status==="lost")return renderLoopLose(G);
+  if(loopGame&&loopGame.__G===G&&document.getElementById("lpwrap"))return;
+  stopRaf();
+  view.innerHTML='';
+  if(!window.Phaser||!window.CongressLoopPhaser){view.innerHTML='<div class="card">Le moteur de jeu n’a pas pu se charger. Vérifie que phaser.min.js est bien dans le dépôt.</div>';return;}
+  var st=document.createElement("div");st.id="loopstage";st.className="loopstage";st.innerHTML='<div id="lpwrap"></div>';document.body.appendChild(st);
+  loopGame=window.CongressLoopPhaser.mount(document.getElementById("lpwrap"),G,loopApi);loopGame.__G=G;
+}
+function starsHTML(n,big){var s="";for(var k=1;k<=3;k++)s+='<span class="st'+(k<=n?" on":"")+(big?" big":"")+'" style="animation-delay:'+(k*.15)+'s">★</span>';return s;}
+function recapList(G){
+  return '<div class="stack list">'+G.orders.map(function(w){var bad=G.missed[w.id];
+    return '<button class="les" data-say="'+esc(head(w.en))+'"><span class="ico">'+SVG.sound+'</span><span><b>'+esc(head(w.en))+'</b><span class="fr">'+esc(w.fr)+'</span></span>'+(bad?'<span class="pill warn">À revoir</span>':'<span></span>')+'</button>';}).join("")+'</div>';
+}
+function renderLoopWin(G){
+  var nx=G.i<LV_PER_WORLD?{w:G.w,i:G.i+1}:(G.w<4?{w:G.w+1,i:1}:null);var allDone=G.w<=4?"Tu as terminé les 60 niveaux du programme !":"Monde terminé, bravo !";
+  view.innerHTML='<div class="gamebar"><button class="back" data-loopmap="1">‹ Carte</button><span class="tag">'+WORLDS[G.w-1].s+' · Niveau '+G.i+'</span></div>'+
+   '<div class="tile navy span2 lwin"><div class="tag">'+(G.newBest?"Niveau réussi · nouveau record":"Niveau réussi")+'</div><div class="stars">'+starsHTML(G.stars,true)+'</div>'+
+   '<div class="lstats"><div><b>'+G.score+'</b><span>points</span></div><div><b>×'+G.maxCombo+'</b><span>meilleur combo</span></div><div><b>+'+G.coins+'</b><span>pièces</span></div></div>'+
+   '<p>'+(G.stars===3?"Sans faute, parfait !":G.mistakes+" erreur"+(G.mistakes>1?"s":"")+". Rejoue sans faute pour 3 étoiles.")+'</p></div>'+
+   '<div class="actions">'+(nx?'<button class="btn primary" data-loopplay="'+nx.w+'-'+nx.i+'">Niveau suivant</button>':'<div class="card center"><b>'+allDone+'</b></div>')+'<button class="btn" data-loopplay="'+G.w+'-'+G.i+'">Rejouer</button></div>'+
+   '<h2>Les mots du niveau</h2>'+recapList(G);
+}
+function renderLoopLose(G){
+  var canSlot=G.reason==="tray"&&(S.loop.b.slot||0)>0;
+  view.innerHTML='<div class="gamebar"><button class="back" data-loopmap="1">‹ Carte</button><span class="tag">'+WORLDS[G.w-1].s+' · Niveau '+G.i+'</span></div>'+
+   '<div class="card score"><div class="tag">'+(G.reason==="tray"?"Plateau plein !":"Temps écoulé !")+'</div><div class="big"><b>'+G.served+'</b><small>/ '+G.orders.length+' commandes</small></div>'+
+   '<p style="margin:8px 0 0">'+(G.reason==="tray"?"Astuce : ne touche que les mots dont tu vois la commande, et garde des cases libres.":"Astuce : le bonus Gel arrête le chrono pendant 6 secondes.")+'</p></div>'+
+   '<div class="actions">'+(canSlot?'<button class="btn primary" data-loopcont="1">'+BSVG.slot+' Continuer avec une case de plus ('+S.loop.b.slot+')</button>':'')+
+   '<button class="btn'+(canSlot?"":" primary")+'" data-loopplay="'+G.w+'-'+G.i+'">Réessayer</button><button class="btn" data-loopmap="1">Retour à la carte</button></div>'+
+   '<h2>Les mots du niveau</h2>'+recapList(G);
+}
+function loopContinue(){var G=overlay.G;if((S.loop.b.slot||0)<=0)return;S.loop.b.slot--;save();G.cap++;G.status="play";render();}
+
+/* carte des niveaux */
+function renderLoopMap(){
+  var cur=currentLevel();if(!loopWorld)loopWorld=cur.w;
+  var w=loopWorld,ts=totalStars();
+  var nodes="";
+  for(var i=1;i<=LV_PER_WORLD;i++){
+    var row=Math.floor((i-1)/3),col=(i-1)%3;if(row%2)col=2-col;
+    var st=lvStars(w,i),un=lvUnlocked(w,i),isCur=cur.w===w&&cur.i===i&&!st;
+    var c=lvCfg(w,i),badge=c.mode==="reverse"?"FR":c.mode==="audio"?"♪":"";
+    nodes+='<button class="node'+(st?" won":"")+(isCur?" cur":"")+(un?"":" locked")+'" style="grid-row:'+(row+1)+';grid-column:'+(col+1)+'" '+(un?'data-loopplay="'+w+'-'+i+'"':'disabled')+'>'+
+      '<span class="nd">'+(un?i:BSVG.lock)+(badge&&un?'<em>'+badge+'</em>':'')+'</span><span class="ns">'+starsHTML(st)+'</span></button>';
+  }
+  view.innerHTML='<div class="gamebar"><button class="back" data-loopback="1">‹ Jeux</button><button class="mutebtn" data-loopmute="1" aria-label="Son">'+(S.loop.mute?BSVG.mute:BSVG.sound)+'</button></div>'+
+   '<div class="qtext" style="margin-top:0">Congress Loop</div>'+
+   '<div class="bento"><div class="tile navy span2"><div class="tag">Ta progression</div>'+
+    '<div class="lstats"><div><b>'+ts+'</b><span>étoiles / '+(WORLDS.length*45)+'</span></div><div><b>'+S.loop.coins+'</b><span>pièces</span></div><div><b>'+cur.w+'-'+cur.i+'</b><span>niveau en cours</span></div></div>'+
+    '<button class="btn primary" data-loopplay="'+cur.w+'-'+cur.i+'">'+SVG.play+' Jouer le niveau '+cur.i+' du monde '+cur.w+'</button></div></div>'+
+   '<div class="chips" style="margin-top:16px">'+WORLDS.map(function(x,k){var open=lvUnlocked(k+1,1);return '<button class="chip'+(w===k+1?" on":"")+'" data-loopworld="'+(k+1)+'"'+(open?"":" disabled")+'>'+(open?"":"🔒 ")+x.s+'</button>';}).join("")+'</div>'+
+   '<div class="card" style="padding:16px 18px"><div class="tag">'+WORLDS[w-1].s+' · '+(w<=4?'leçons '+track(w)[0].w+' à '+track(w).slice(-1)[0].w:'parcours '+QNAMES[w]+' · débloqué d’office')+'</div><b style="font-family:var(--f-display);font-size:20px">'+WORLDS[w-1].n+'</b></div>'+
+   '<div class="lvpath">'+nodes+'</div>'+
+   '<p class="tag center" style="margin:4px 0 0">♪ = niveau à l’écoute · FR = niveau inversé</p>'+
+   '<h2>Bonus</h2><div class="stack list">'+["hint","freeze","slot"].map(function(b){
+     return '<div class="les shoprow"><span class="ico">'+BSVG[b]+'</span><span><b>'+BOOST[b].n+' · '+(S.loop.b[b]||0)+' en stock</b><span class="fr">'+BOOST[b].d+'</span></span><button class="pill'+(S.loop.coins>=BOOST[b].p?" good":" neutral")+' buy" data-buy="'+b+'"'+(S.loop.coins>=BOOST[b].p?"":" disabled")+'>'+BOOST[b].p+' pièces</button></div>';}).join("")+'</div>'+
+   '<h2>Comment jouer</h2><div class="card"><p>Chaque marmite affiche une commande en français. Touche le mot anglais qui correspond sur le tapis pour la servir.</p><p>Un mot touché sans marmite correspondante part sur le <b>plateau d’attente</b>. Tu pourras le servir plus tard en le touchant. Si le plateau est plein, la partie est perdue.</p><p style="margin:0">Les <b>intrus</b> ne correspondent à aucune commande : évite-les. Enchaîne les bonnes réponses pour les <b>combos</b>, et finis sans erreur pour 3 étoiles.</p></div>';
+}
+
+/* ===================== RENDU ===================== */
+var view=$("#view"),prevKey=null;
+function render(){
+  var inov=!!overlay;
+  document.body.classList.toggle("inquiz",inov);
+  $("#hdr").style.display=(inov||(tab==="lessons"&&route.lesson)||(tab==="games"&&loopMap))?"none":"";
+  renderTabs();$("#htitle").textContent=TITLES[tab];
+  if(overlay){
+    if(overlay.type==="quiz")renderQuiz();
+    else if(overlay.type==="loop")renderLoop();
+    else{var g=overlay.g;({memory:renderMemory,chrono:renderChrono,scramble:renderScramble,dictee:renderDictee})[g.id](g);}
+  }
+  else if(tab==="home")renderHome();
+  else if(tab==="lessons")renderLessons();
+  else if(tab==="review")renderReview();
+  else if(tab==="games")(loopMap?renderLoopMap():renderGames());
+  else renderOral();
+  var key=overlay?(overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"");
+  if(key!==prevKey){view.classList.remove("v-fade","v-up");void view.offsetWidth;view.classList.add(overlay?"v-up":"v-fade");}
+  prevKey=key;
+}
+function go(fn){fn();render();window.scrollTo(0,0);}
+
+document.addEventListener("submit",function(e){
+  if(e.target.id!=="dform")return;e.preventDefault();
+  var g=overlay&&overlay.g;if(!g||g.id!=="dictee"||g.checked)return;
+  var v=$("#dinput").value;g.val=v;
+  var ok=normW(v)===normW(head(g.list[g.pos].en));if(ok)g.score++;g.checked=ok?"ok":"ko";render();
+});
+document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay&&overlay.g)overlay.g.val=e.target.value;});
+
+document.addEventListener("click",function(e){
+  var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
+  if(el.form&&el.type==="submit")return;
+  if(d.tab)return go(function(){stopTimer();stopRaf();overlay=null;loopMap=false;tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
+  if(d.say!==undefined){speak(d.say);return;}
+  if(d.open!==undefined){if(!d.open)return;return go(function(){overlay=null;tab="lessons";route.lesson=+d.open;quarterSel=BYW[+d.open].q;});}
+  if(d.back)return go(function(){route.lesson=null;});
+  if(d.quarter)return go(function(){quarterSel=+d.quarter;});
+  if(d.quarterOpen)return go(function(){tab="lessons";route.lesson=null;quarterSel=+d.quarterOpen;});
+  if(d.lquiz)return go(function(){overlay={type:"quiz",q:lessonQuiz(+d.lquiz)};});
+  if(d.rquiz)return go(function(){overlay={type:"quiz",q:reviewQuiz()};});
+  if(d.opt!==undefined&&overlay&&overlay.type==="quiz"){
+    var z=overlay.q;if(z.locked)return;var q=z.qs[z.pos],i=+d.opt;z.locked=true;z.picked=i;z.res.push(i===q.a);speak(q.say);render();return;}
+  if(d.qnext){var zq=overlay.q;if(zq.pos<zq.qs.length-1)return go(function(){zq.pos++;zq.locked=false;zq.picked=null;});return go(finishQuiz);}
+  if(d.again)return go(function(){var z=overlay.q;overlay={type:"quiz",q:z.kind==="lesson"?lessonQuiz(z.w):reviewQuiz()};});
+  if(d.quit)return go(function(){stopTimer();var wasLoop=overlay&&overlay.type==="loop";stopRaf();overlay=null;if(wasLoop){tab="games";loopMap=true;}});
+  /* congress loop */
+  if(d.loopmap)return go(function(){stopRaf();overlay=null;tab="games";loopMap=true;});
+  if(d.loopback)return go(function(){loopMap=false;});
+  if(d.loopworld)return go(function(){loopWorld=+d.loopworld;});
+  if(d.loopplay){var pr=d.loopplay.split("-");return go(function(){tab="games";loopMap=true;loopWorld=+pr[0];startLoop(+pr[0],+pr[1]);});}
+  if(d.loopcont){loopContinue();return;}
+  if(d.loopmute){S.loop.mute=!S.loop.mute;save();render();return;}
+  if(d.buy){var bb=d.buy;if(S.loop.coins>=BOOST[bb].p){S.loop.coins-=BOOST[bb].p;S.loop.b[bb]=(S.loop.b[bb]||0)+1;save();sfx.pop();render();}return;}
+  /* révision */
+  if(d.scope)return go(function(){R.scope=d.scope;buildDeck();});
+  if(d.onlynew)return go(function(){R.onlyNew=!R.onlyNew;buildDeck();});
+  if(d.flip){R.flipped=!R.flipped;render();return;}
+  if(d.mark!==undefined){
+    var w=R.deck[R.pos%R.deck.length];if(!w)return;S.known[w.id]=d.mark==="1";markToday();save();
+    if(R.onlyNew&&d.mark==="1"){R.deck.splice(R.pos%R.deck.length,1);if(R.deck.length)R.pos=R.pos%R.deck.length;}else R.pos++;
+    R.flipped=false;render();return;}
+  /* jeux */
+  if(d.game)return go(function(){tab=tab==="home"?"games":tab==="games"?"games":tab;startGame(d.game);});
+  if(d.mc!==undefined){memoryTap(+d.mc);return;}
+  if(d.tf!==undefined){chronoAnswer(+d.tf);return;}
+  if(d.tok!==undefined){var g1=overlay.g;g1.built.push(+d.tok);speak(g1.bank[+d.tok].t,1);render();return;}
+  if(d.unb!==undefined){overlay.g.built.splice(+d.unb,1);render();return;}
+  if(d.scheck){var g2=overlay.g,p=g2.list[g2.pos],ans=g2.built.map(function(k){return g2.bank[k].t;}).join(" ");var ok=ans===p.en;if(ok)g2.score++;g2.checked=ok?"ok":"ko";speak(p.en);render();return;}
+  if(d.snext){var g3=overlay.g;if(g3.pos<g3.list.length-1)return go(function(){g3.pos++;scrambleSetup();});return go(function(){g3.done=true;gameRecord("scramble",g3.score,true);});}
+  if(d.dsay){speak(head(overlay.g.list[overlay.g.pos].en),.85);return;}
+  if(d.dslow){speak(head(overlay.g.list[overlay.g.pos].en),.6);return;}
+  if(d.dhint){overlay.g.hint=true;render();return;}
+  if(d.dnext){var g4=overlay.g;if(g4.pos<g4.list.length-1)return go(function(){g4.pos++;g4.checked=null;g4.hint=false;g4.val="";setTimeout(function(){speak(head(g4.list[g4.pos].en),.85);},300);});return go(function(){g4.done=true;gameRecord("dictee",g4.score,true);});}
+  /* oral */
+  if(d.oslow){speak(O.cur.en,.7);return;}
+  if(d.rec&&SR&&!O.listening){listen();return;}
+  if(d.nextphrase)return go(nextPhrase);
+});
+
+buildDeck();render();
+})();
