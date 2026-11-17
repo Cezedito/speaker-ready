@@ -411,7 +411,7 @@ if(S.loop.coins===undefined)S.loop.coins=0;
 if(!S.loop.b)S.loop.b={hint:2,freeze:2,slot:2};
 if(S.loop.mute===undefined)S.loop.mute=false;
 var loopWorld=null,loopMap=false,rafId=null;
-var BOOST={hint:{n:"Indice",p:30,d:"Montre le bon mot"},freeze:{n:"Gel",p:40,d:"Stoppe le tapis et le chrono 6 s"},slot:{n:"Case",p:50,d:"Une case de plus sur le plateau"}};
+var BOOST={hint:{n:"Indice",p:30,d:"Montre le bon mot"},freeze:{n:"Gel",p:40,d:"Stoppe le tapis et la patience des clients 6 s"},slot:{n:"Case",p:50,d:"Une case de plus sur le plateau"}};
 var BSVG={
  hint:'<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>',
  freeze:'<svg viewBox="0 0 24 24"><path d="M12 2v20M4.5 6.5l15 11M19.5 6.5l-15 11M9 4l3 2 3-2M9 20l3-2 3 2"/></svg>',
@@ -439,7 +439,7 @@ function lvCfg(w,i){
   var distract=d===1?(i<6?0:2):d+1;
   var per=d===1?10:d===2?8.5:d===3?7.5:6.5;
   return {w:w,i:i,weeks:weeks,mode:mode,orders:orders,pots:pots,distract:distract,
-    speed:34+i*2.5+(d-1)*8,tray:d>=3?4:5,time:Math.round(orders*per+(mode==="audio"?orders*2.5:0)+(mode==="reverse"?orders*1.5:0))};
+    speed:70+i*4+(d-1)*18,patience:Math.max(6,(d===1?16:d===2?13:d===3?11:9.5)-i*.25+(mode==="audio"?4:0)+(mode==="reverse"?2.5:0)),tray:d>=3?4:5,time:Math.round(orders*per+(mode==="audio"?orders*2.5:0)+(mode==="reverse"?orders*1.5:0))};
 }
 function pickDistinct(pool,n,avoid){
   var seenE={},seenF={},out=[];
@@ -456,7 +456,7 @@ function startLoop(w,i){
   var items=shuffle(orders.map(function(x){return {word:x,order:true};}).concat(dis.map(function(x){return {word:x,order:false};})));
   items.forEach(function(it,k){it.id=k;it.state="queue";});
   var G={w:w,i:i,c:c,orders:orders,q:0,pots:[],items:items,tray:[],cap:c.tray,mistakes:0,combo:0,maxCombo:0,score:0,
-    served:0,missed:{},status:"play",reason:"",tLeft:c.time,begun:false};
+    served:0,missed:{},status:"play",reason:"",tLeft:0,hearts:3,expired:0,bonusCoins:0,begun:false};
   overlay={type:"loop",G:G};
 }
 
@@ -493,7 +493,7 @@ var loopApi={
     G.status="won";
     var stars=G.mistakes===0?3:G.mistakes<=2?2:1,prev=lvStars(G.w,G.i);
     G.stars=stars;G.newBest=stars>prev;if(stars>prev)S.loop.lv[lvKey(G.w,G.i)]=stars;
-    G.coins=10+stars*10+G.maxCombo*2+Math.round(Math.max(0,G.tLeft)/5);S.loop.coins+=G.coins;
+    G.coins=10+stars*10+G.maxCombo*2+(G.bonusCoins||0);S.loop.coins+=G.coins;
     markToday();save();return {stars:stars,coins:G.coins};
   },
   lose:function(G,reason){G.status="lost";G.reason=reason;markToday();save();},
@@ -528,8 +528,8 @@ function renderLoopWin(G){
 function renderLoopLose(G){
   var canSlot=G.reason==="tray"&&(S.loop.b.slot||0)>0;
   view.innerHTML='<div class="gamebar"><button class="back" data-loopmap="1">‹ Carte</button><span class="tag">'+WORLDS[G.w-1].s+' · Niveau '+G.i+'</span></div>'+
-   '<div class="card score"><div class="tag">'+(G.reason==="tray"?"Plateau plein !":"Temps écoulé !")+'</div><div class="big"><b>'+G.served+'</b><small>/ '+G.orders.length+' commandes</small></div>'+
-   '<p style="margin:8px 0 0">'+(G.reason==="tray"?"Astuce : ne touche que les mots dont tu vois la commande, et garde des cases libres.":"Astuce : le bonus Gel arrête le chrono pendant 6 secondes.")+'</p></div>'+
+   '<div class="card score"><div class="tag">'+(G.reason==="tray"?"Plateau plein !":G.reason==="hearts"?"Trop de clients sont partis !":"Temps écoulé !")+'</div><div class="big"><b>'+G.served+'</b><small>/ '+G.orders.length+' commandes</small></div>'+
+   '<p style="margin:8px 0 0">'+(G.reason==="tray"?"Astuce : ne touche que les mots dont tu vois la commande, et garde des cases libres.":"Astuce : sers d’abord les clients dont la jauge est rouge. Le bonus Gel met leur patience en pause 6 secondes.")+'</p></div>'+
    '<div class="actions">'+(canSlot?'<button class="btn primary" data-loopcont="1">'+BSVG.slot+' Continuer avec une case de plus ('+S.loop.b.slot+')</button>':'')+
    '<button class="btn'+(canSlot?"":" primary")+'" data-loopplay="'+G.w+'-'+G.i+'">Réessayer</button><button class="btn" data-loopmap="1">Retour à la carte</button></div>'+
    '<h2>Les mots du niveau</h2>'+recapList(G);
@@ -559,7 +559,7 @@ function renderLoopMap(){
    '<p class="tag center" style="margin:4px 0 0">♪ = niveau à l’écoute · FR = niveau inversé</p>'+
    '<h2>Bonus</h2><div class="stack list">'+["hint","freeze","slot"].map(function(b){
      return '<div class="les shoprow"><span class="ico">'+BSVG[b]+'</span><span><b>'+BOOST[b].n+' · '+(S.loop.b[b]||0)+' en stock</b><span class="fr">'+BOOST[b].d+'</span></span><button class="pill'+(S.loop.coins>=BOOST[b].p?" good":" neutral")+' buy" data-buy="'+b+'"'+(S.loop.coins>=BOOST[b].p?"":" disabled")+'>'+BOOST[b].p+' pièces</button></div>';}).join("")+'</div>'+
-   '<h2>Comment jouer</h2><div class="card"><p>Chaque marmite affiche une commande en français. Touche le mot anglais qui correspond sur le tapis pour la servir.</p><p>Un mot touché sans marmite correspondante part sur le <b>plateau d’attente</b>. Tu pourras le servir plus tard en le touchant. Si le plateau est plein, la partie est perdue.</p><p style="margin:0">Les <b>intrus</b> ne correspondent à aucune commande : évite-les. Enchaîne les bonnes réponses pour les <b>combos</b>, et finis sans erreur pour 3 étoiles.</p></div>';
+   '<h2>Comment jouer</h2><div class="card"><p>Chaque client attend sa commande en français au-dessus de sa marmite. Touche sur le tapis le mot anglais qui correspond pour la servir.</p><p>La <b>jauge de patience</b> autour du client se vide : s’il part, tu perds un ❤️. Trois cœurs perdus, c’est perdu.</p><p>Un mot touché sans marmite correspondante part sur le <b>plateau d’attente</b>. Plateau plein : perdu aussi. Les <b>intrus</b> ne correspondent à aucune commande.</p><p style="margin:0">Enchaîne pour les <b>combos</b>, déclenche la <b>FEVER</b> à ×5 (points doublés), attrape les <b>mots dorés ★</b> (+5 pièces) et sers vite pour le bonus <b>FAST!</b>. Le tapis accélère au fil de la partie et des niveaux.</p></div>';
 }
 
 /* ===================== RENDU ===================== */

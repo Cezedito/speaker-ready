@@ -10,6 +10,7 @@
 var PAL=[0xFFD86B,0x8EE3C8,0xFFB4C6,0x9ED8FF,0xC9B6FF,0xFFC49B,0xB5E48C];
 var C={navy:0x00205B,navy2:0x0B2C6E,terra:0xE2725B,cta:0xC2543E,cream:0xFFF6EA,good:0x2F9E66,bad:0xD1364A,gold:0xF7B733,broth:0xF39B4A,white:0xFFFFFF,ice:0x5AA9E6};
 var FONT_D="Montserrat, 'Avenir Next', system-ui, sans-serif",FONT_B="-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif";
+var AVATARS=["👩‍⚕️","👨‍⚕️","🧑‍💼","👩‍💼","🧑‍🔬","👨‍🏫","👩‍🔬","🧑‍⚕️","👩‍🏫","🧑‍💻"];
 var PRAISE=[[3,"GREAT!"],[5,"AWESOME!"],[7,"INCREDIBLE!"],[10,"UNSTOPPABLE!"],[14,"LEGENDARY!"]];
 function shade(c,f){var r=Math.min(255,Math.round((c>>16&255)*f)),g=Math.min(255,Math.round((c>>8&255)*f)),b=Math.min(255,Math.round((c&255)*f));return (r<<16)|(g<<8)|b;}
 function hex(c){return "#"+("000000"+c.toString(16)).slice(-6);}
@@ -68,7 +69,8 @@ class LoopScene extends Phaser.Scene{
     G.items.forEach(function(it){if(it.state==="belt")it.state="queue";});
     if(!G.pots.length){for(var p=0;p<G.c.pots;p++)G.pots.push(this.nextPot(false));}
     this.chips={};this.potV=[];this.trayV=[];this.slots=[];this.boostV={};
-    this.off=0;this.freezeUntil=0;this.hintUntil=0;this.lastTick=-1;this.ended=false;
+    this.off=0;this.freezeUntil=0;this.hintUntil=0;this.feverUntil=0;this.lastUrg=0;this.ended=false;
+    if(G.hearts===undefined)G.hearts=3;if(!G.expired)G.expired=0;if(!G.bonusCoins)G.bonusCoins=0;
     this.drawBackground();
     this.layout();
     this.drawTop();
@@ -140,8 +142,8 @@ class LoopScene extends Phaser.Scene{
     this.txt(58,22,(wname+" · NIVEAU "+G.i).toUpperCase(),11,"#6A7590",{ox:0,display:false});
     this.scoreT=this.txt(58,42,String(G.score),22,"#00205B",{ox:0,display:true});
     this.shownScore=G.score;
-    var pill=this.add.graphics();pill.fillStyle(0xffffff,1);pill.fillRoundedRect(W-92,18,76,32,16);
-    this.timeT=this.txt(W-54,34,"",16,"#00205B",{display:true});
+    var pill=this.add.graphics();pill.fillStyle(0xffffff,1);pill.fillRoundedRect(W-112,18,96,32,16);
+    this.timeT=this.txt(W-64,35,"",17,"#00205B",{display:true});
     this.barBg=this.add.graphics();this.barBg.fillStyle(0x00205B,.08);this.barBg.fillRoundedRect(16,62,W-32,9,5);
     this.bar=this.add.graphics();
     this.progT=this.txt(16,84,"",12,"#6A7590",{ox:0});
@@ -152,9 +154,10 @@ class LoopScene extends Phaser.Scene{
     this.updateTop();
   }
   updateTop(){
-    var G=this.G,W=this.W,frac=Math.max(0,G.tLeft/G.c.time),col=this.time.now<this.freezeUntil?C.ice:G.tLeft<=10?C.bad:frac<.5?C.terra:C.good;
+    var G=this.G,W=this.W,frac=Math.min(1,(G.served+G.expired)/G.orders.length),fever=this.time.now<this.feverUntil,col=this.time.now<this.freezeUntil?C.ice:fever?0xFF4F8B:C.good;
     this.bar.clear();this.bar.fillStyle(col,1);if(frac>0)this.bar.fillRoundedRect(16,62,Math.max(10,(W-32)*frac),9,5);
-    this.timeT.setText("⏱ "+Math.max(0,Math.ceil(G.tLeft)));this.timeT.setColor(G.tLeft<=10?"#D1364A":"#00205B");
+    var hs="";for(var k=0;k<3;k++)hs+=k<G.hearts?"❤️":"🤍";
+    if(this.timeT.text!==hs)this.timeT.setText(hs);
     this.progT.setText(G.served+" / "+G.orders.length+(G.c.mode==="normal"?" commandes servies":" servies"));
   }
   bumpScore(){
@@ -171,16 +174,19 @@ class LoopScene extends Phaser.Scene{
     var c=this.add.container(pos.x,pos.y);
     var card=this.add.graphics();
     var potG=this.add.graphics();
-    var px=horiz?w/2-34:0,py=horiz?6:h/2-30;
-    this.drawPotShape(potG,px,py,horiz?.82:1);
-    var label=this.txt(horiz?-14:0,horiz?0:-h/2+30,"",horiz?14:15,"#00205B",{wrap:horiz?w-90:w-18,display:false});
-    var sub=this.txt(horiz?-14:0,horiz?20:-h/2+52,"",11,"#1E7A4C",{wrap:w-20});
+    var px=horiz?w/2-34:0,py=horiz?6:h/2-24;
+    this.drawPotShape(potG,px,py,horiz?.82:.8);
+    var label=this.txt(horiz?-6:0,horiz?2:-h/2+56,"",horiz?14:15,"#00205B",{wrap:horiz?w-104:w-14,display:false});
+    var sub=this.txt(horiz?-6:0,horiz?22:-h/2+76,"",11,"#1E7A4C",{wrap:horiz?w-104:w-14});
+    var ax=-w/2+22,ay=-h/2+22,ring=this.add.graphics(),avBg=this.add.graphics();
+    avBg.fillStyle(0xFFF1E6,1);avBg.fillCircle(ax,ay,15);
+    var av=this.txt(ax,ay+1,"",18,"#000000");
     var steam=this.add.particles(0,0,"puff",{x:pos.x+px,y:pos.y+py-16,lifespan:1600,speedY:{min:-22,max:-12},speedX:{min:-6,max:6},scale:{start:.18,end:.55},alpha:{start:.35,end:0},frequency:420,tint:0xffffff});
     steam.setDepth(2);
-    c.add([card,potG,label,sub]);
+    c.add([card,potG,label,sub,avBg,ring,av]);
     c.setSize(w,h).setInteractive();
     c.on("pointerdown",function(){var o=self.G.pots[p];if(o&&!o.done&&self.G.c.mode==="audio"){self.api.speak(o.word,.85);self.tweens.add({targets:c,scale:{from:.95,to:1},duration:250,ease:"Back.Out"});}});
-    var v={c:c,card:card,pot:potG,label:label,sub:sub,steam:steam,x:pos.x,y:pos.y,mouth:{x:pos.x+px,y:pos.y+py-12},w:w,h:h,horiz:horiz,px:px,py:py};
+    var v={c:c,card:card,pot:potG,label:label,sub:sub,steam:steam,ring:ring,av:av,ax:ax,ay:ay,x:pos.x,y:pos.y,mouth:{x:pos.x+px,y:pos.y+py-12},w:w,h:h,horiz:horiz,px:px,py:py};
     this.paintPot(p,v);
     return v;
   }
@@ -201,25 +207,34 @@ class LoopScene extends Phaser.Scene{
     v.card.fillStyle(col,1);v.card.fillRoundedRect(-w/2,-h/2,w,h,20);
     if(o&&!o.done){v.card.lineStyle(2,C.terra,.25);v.card.strokeRoundedRect(-w/2+1,-h/2+1,w-2,h-2,19);}
     v.c.setAlpha(o?1:.35);v.steam.emitting=!!o&&!o.done;
-    if(!o){v.label.setText("—");v.sub.setText("");return;}
-    if(o.done){v.label.setFontSize(v.horiz?12.5:14);v.label.setText("✓ "+this.api.head(o.word));v.label.setColor("#1E7A4C");v.sub.setText(o.word.fr);return;}
-    v.label.setColor("#00205B");v.sub.setText("");
+    v.ring.clear();
+    if(!o){v.label.setText("—");v.sub.setText("");v.av.setText("");return;}
+    if(o.gone){v.av.setText("😤");v.label.setFontSize(13);v.label.setText("Client parti…");v.label.setColor("#B02236");v.sub.setText(this.api.head(o.word)+" = "+o.word.fr);v.sub.setColor("#B02236");return;}
+    v.sub.setColor("#1E7A4C");
+    if(o.done){v.av.setText("😍");v.label.setFontSize(v.horiz?12.5:14);v.label.setText("✓ "+this.api.head(o.word));v.label.setColor("#1E7A4C");v.sub.setText(o.word.fr);return;}
+    v.label.setColor("#00205B");v.sub.setText("");v.av.setText(o.av);this.drawRing(v,o);
     var txt=mode==="reverse"?this.api.head(o.word):mode==="audio"?"🔊  Écoute":o.word.fr,len=txt.length;
-    v.label.setFontSize(v.horiz?(len>22?11.5:len>11?12.5:14):(len>28?12.5:len>16?13.5:15));
+    v.label.setFontSize(v.horiz?(len>22?11.5:len>11?12.5:14):(len>24?12:len>14?13:15));
     v.label.setText(txt);
   }
   nextPot(speakIt){
     var G=this.G;if(G.q>=G.orders.length)return null;
-    var o={word:G.orders[G.q++],done:false};
+    var pat=G.c.patience*1000,o={word:G.orders[G.q++],done:false,pat:pat,max:pat,av:Phaser.Utils.Array.GetRandom(AVATARS)};
     if(speakIt&&G.c.mode==="audio"){var self=this;this.time.delayedCall(450,function(){if(!self.ended)self.api.speak(o.word,.9);});}
     return o;
+  }
+  drawRing(v,o){
+    var g=v.ring;g.clear();if(!o||o.done||o.gone)return;
+    var f=Math.max(0,o.pat/o.max),col=f>.5?C.good:f>.25?0xF2A33A:C.bad;
+    g.lineStyle(4,0x00205B,.08);g.strokeCircle(v.ax,v.ay,17);
+    g.lineStyle(4,col,1);g.beginPath();g.arc(v.ax,v.ay,17,-Math.PI/2,-Math.PI/2+Math.PI*2*f,false);g.strokePath();
   }
   potIndex(word){var P=this.G.pots;for(var p=0;p<P.length;p++){if(P[p]&&!P[p].done&&P[p].word.id===word.id)return p;}return -1;}
 
   /* ----- tapis ----- */
   drawBelt(){
     var p=this.path,self=this;
-    this.beltShadow=this.add.graphics();this.beltG=this.add.graphics();this.rollers=this.add.graphics();
+    this.beltShadow=this.add.graphics();this.beltG=this.add.graphics();this.feverG=this.add.graphics();this.rollers=this.add.graphics();
     var draw=function(g,w,col,a,dy){g.lineStyle(w,col,a);g.beginPath();for(var k=0;k<=160;k++){var q=self.pt(self.per*k/160);if(k===0)g.moveTo(q.x,q.y+dy);else g.lineTo(q.x,q.y+dy);}g.closePath();g.strokePath();};
     draw(this.beltShadow,this.chipH+22,0x000000,.12,7);
     draw(this.beltG,this.chipH+22,C.navy,1,0);
@@ -235,6 +250,13 @@ class LoopScene extends Phaser.Scene{
     this.comboL=this.txt(0,30,"",12,"#00205B",{display:true});
     this.comboC.add([this.comboN,this.comboL]);this.comboC.setAlpha(0);
     this.freezeG=this.add.graphics().setDepth(6);this.freezeT=this.txt(cx,cy,"❄",54,"#ffffff").setDepth(6).setAlpha(0);
+  }
+  drawFever(time){
+    var g=this.feverG;g.clear();if(time>=this.feverUntil)return;
+    var self=this,col=Phaser.Display.Color.HSVToRGB((time/1400)%1,.55,1).color,a=.35+.15*Math.sin(time/90);
+    g.lineStyle(this.chipH+22,col,a);g.beginPath();
+    for(var k=0;k<=120;k++){var q=self.pt(self.per*k/120);if(k===0)g.moveTo(q.x,q.y);else g.lineTo(q.x,q.y);}
+    g.closePath();g.strokePath();
   }
   drawRollers(){
     var g=this.rollers;g.clear();g.fillStyle(0xffffff,.16);
@@ -263,6 +285,7 @@ class LoopScene extends Phaser.Scene{
     return Math.random()<.6?ords[0]:Phaser.Utils.Array.GetRandom(ords);
   }
   placeOn(k,it,delay){
+    if(it.order&&it.gold===undefined)it.gold=Math.random()<.15;
     it.state="belt";this.slots[k].item=it.id;
     var chip=this.makeChip(it),self=this,q=this.pt(this.slotS(k));chip.setPosition(q.x,q.y);
     chip.setScale(0);this.tweens.add({targets:chip,scale:1,duration:380,delay:delay||0,ease:"Back.Out"});
@@ -270,7 +293,7 @@ class LoopScene extends Phaser.Scene{
   }
   chipLabel(it){return this.G.c.mode==="reverse"?it.word.fr:this.api.head(it.word);}
   makeChip(it,small){
-    var self=this,w=small?this.trayW-6:this.chipW,h=small?this.trayH-8:this.chipH,col=PAL[it.id%PAL.length];
+    var self=this,w=small?this.trayW-6:this.chipW,h=small?this.trayH-8:this.chipH,col=it.gold?0xFFC93C:PAL[it.id%PAL.length];
     var c=this.add.container(0,0).setDepth(small?8:4);
     var g=this.add.graphics();
     g.fillStyle(shade(col,.72),1);g.fillRoundedRect(-w/2,-h/2+4,w,h,14);
@@ -280,6 +303,7 @@ class LoopScene extends Phaser.Scene{
     var t=this.txt(0,1,label,fs,"#00205B",{wrap:w-12});
     var glow=this.add.graphics();glow.lineStyle(4,C.gold,1);glow.strokeRoundedRect(-w/2-4,-h/2-4,w+8,h+12,17);glow.setVisible(false);
     c.add([glow,g,t]);c.glow=glow;c.itemId=it.id;
+    if(it.gold){var st=this.txt(w/2-9,-h/2+9,"★",14,"#ffffff",{display:true,stroke:"#C98A00",sw:3});c.add(st);this.tweens.add({targets:st,scale:{from:.8,to:1.3},angle:{from:-15,to:15},duration:500,yoyo:true,repeat:-1});}
     c.setSize(w,h+4).setInteractive({useHandCursor:true});
     c.on("pointerdown",function(){if(small)self.tapTray(it.id);else self.tapBelt(it.id);});
     return c;
@@ -338,7 +362,7 @@ class LoopScene extends Phaser.Scene{
       this.freezeUntil=this.time.now+6000;
       var p=this.path;this.freezeG.clear();this.freezeG.fillStyle(C.ice,.18);this.freezeG.fillRoundedRect(p.cx-p.R-this.chipW/2-12,p.cy-(p.vert?p.L/2:0)-p.R-this.chipH/2-12,2*p.R+this.chipW+24,(p.vert?p.L:0)+2*p.R+this.chipH+24,30);
       this.freezeT.setAlpha(.9);this.tweens.add({targets:this.freezeT,scale:{from:2,to:1},duration:400,ease:"Back.Out"});
-      this.float(p.cx,p.cy+50,"Tapis gelé 6 s",15,"#1D4E7A");
+      this.float(p.cx,p.cy+50,"Tapis et clients gelés 6 s",15,"#1D4E7A");
     }
     if(b==="slot"){G.cap++;this.layoutTray();this.float(this.W/2,this.trayY-46,"+1 case",16,"#1E7A4C");}
     if(b==="hint"){
@@ -403,16 +427,19 @@ class LoopScene extends Phaser.Scene{
     var G=this.G,self=this,o=G.pots[p],v=this.potV[p];
     o.done=true;it.state="served";G.served++;
     var now=this.time.now;G.combo=(now-(this.lastOk||-9999)<3500)?G.combo+1:1;this.lastOk=now;G.maxCombo=Math.max(G.maxCombo,G.combo);
-    var pts=10*G.combo;G.score+=pts;
+    var fever=now<this.feverUntil,fast=o.pat/o.max>.65,pts=10*G.combo*(fever?2:1)+(fast?5:0);G.score+=pts;
+    if(it.gold)G.bonusCoins+=5;
     this.fly(chip,v.mouth,330,function(){
       chip.destroy();
       self.sfx.serve(G.combo);self.sfx.splash();buzz(14);self.api.speak(it.word,1);
       self.splash.explode(18,v.mouth.x,v.mouth.y);
       self.tweens.add({targets:v.c,scaleY:{from:.86,to:1},scaleX:{from:1.08,to:1},duration:380,ease:"Back.Out"});
       self.paintPot(p,v);
-      self.float(v.x,v.y-v.h/2+6,"+"+pts,22,"#1E7A4C");
+      self.float(v.x,v.y-v.h/2+6,"+"+pts+(fever?" ×2":""),22,fever?"#FF4F8B":"#1E7A4C");
+      if(fast)self.time.delayedCall(140,function(){self.float(v.x,v.y+4,"FAST!",15,"#E2725B");});
+      if(it.gold){self.coinFx.explode(16,v.mouth.x,v.mouth.y);self.sfx.coin();self.time.delayedCall(260,function(){self.float(v.x,v.y+24,"+5 🪙",15,"#C98A00");});}
       self.bumpScore();self.updateTop();self.showCombo();
-      if(G.served>=G.orders.length){self.finishWin();return;}
+      if(G.served+G.expired>=G.orders.length){self.finishWin();return;}
       self.time.delayedCall(520,function(){
         if(self.ended)return;
         self.tweens.add({targets:v.c,scaleX:0,duration:140,ease:"Quad.In",onComplete:function(){
@@ -440,11 +467,40 @@ class LoopScene extends Phaser.Scene{
       if(full)self.finishLose("tray");
     });
   }
+  startFever(){
+    this.feverUntil=this.time.now+7000;var self=this;
+    this.time.delayedCall(500,function(){if(!self.ended){self.banner("FEVER ×2!","#FF4F8B");self.sfx.t([523,659,784,1047,1319,1568],.09,"square",.05,.05);}});
+    buzz([30,30,30,30,60]);
+  }
+  expire(p){
+    var G=this.G,self=this,o=G.pots[p],v=this.potV[p];if(!o||o.done)return;
+    o.done=true;o.gone=true;G.expired++;G.hearts--;G.mistakes++;G.missed[o.word.id]=1;
+    G.items.forEach(function(it){
+      if(it.order&&it.word.id===o.word.id&&it.state!=="served"){
+        if(it.state==="belt"){var ch=self.chips[it.id];if(ch){self.redFx.explode(10,ch.x,ch.y);ch.destroy();}delete self.chips[it.id];self.freeSlotOf(it.id);}
+        if(it.state==="tray"){var k=G.tray.indexOf(it.id);if(k>-1){G.tray.splice(k,1);var c=self.trayV.splice(k,1)[0];if(c){self.redFx.explode(10,c.x,c.y);c.destroy();}self.reflowTray();}}
+        it.state="gone";
+      }});
+    this.breakCombo();this.sfx.bad();this.sfx.lose();buzz([60,40,60]);this.cameras.main.shake(220,.008);
+    this.paintPot(p,v);this.tweens.add({targets:v.c,x:v.x+8,duration:50,yoyo:true,repeat:4,onComplete:function(){v.c.x=v.x;}});
+    this.float(v.x,v.y,"−1 ❤️",22,"#D1364A");this.updateTop();
+    this.tweens.add({targets:this.timeT,scale:{from:1.5,to:1},duration:400,ease:"Back.Out"});
+    if(G.hearts<=0){this.ended=true;this.finishLose("hearts");return;}
+    if(G.served+G.expired>=G.orders.length){this.finishWin();return;}
+    this.time.delayedCall(700,function(){
+      if(self.ended)return;
+      self.tweens.add({targets:v.c,scaleX:0,duration:140,ease:"Quad.In",onComplete:function(){
+        G.pots[p]=self.nextPot(true);self.paintPot(p,v);
+        self.tweens.add({targets:v.c,scaleX:1,duration:220,ease:"Back.Out"});
+      }});
+    });
+  }
   breakCombo(){var G=this.G;if(G.combo>=3)this.float(this.path.cx,this.path.cy+40,"Combo perdu",13,"#6A7590");G.combo=0;this.showCombo();}
   showCombo(){
     var G=this.G,c=G.combo;
     if(c<2){this.tweens.add({targets:this.comboC,alpha:0,duration:200});return;}
-    this.comboN.setText("×"+c);this.comboL.setText(c>=10?"EN FEU 🔥":"COMBO");
+    if(c%5===0)this.startFever();
+    this.comboN.setText("×"+c);this.comboL.setText(this.time.now<this.feverUntil?"FEVER ×2 🔥":c>=10?"EN FEU 🔥":"COMBO");
     this.comboN.setColor(c>=10?"#D1364A":c>=5?"#E2725B":"#C2543E");
     this.comboC.setAlpha(1);this.comboC.setScale(1.6);this.tweens.add({targets:this.comboC,scale:1,duration:320,ease:"Back.Out"});
     for(var k=0;k<PRAISE.length;k++){if(PRAISE[k][0]===c){this.banner(PRAISE[k][1]);this.sfx.praise();this.sparks.explode(30,this.path.cx,this.path.cy);buzz([20,30,20]);}}
@@ -454,10 +510,22 @@ class LoopScene extends Phaser.Scene{
   update(time,delta){
     if(!this.started||this.ended)return;
     var G=this.G,dt=Math.min(.05,delta/1000),frozen=time<this.freezeUntil;
-    if(!frozen){this.off+=G.c.speed*dt;G.tLeft-=dt;}
+    var fever=time<this.feverUntil,speed=G.c.speed*Math.min(1.6,1+.035*G.served)*(fever?1.2:1);
+    if(!frozen){this.off+=speed*dt;}
     else if(this.freezeT.alpha>0&&this.freezeUntil-time<400){this.freezeT.setAlpha(0);this.freezeG.clear();}
     if(this.hintUntil&&time>this.hintUntil){this.hintUntil=0;var self=this;Object.keys(this.chips).forEach(function(id){self.chips[id].glow.setVisible(false);});this.trayV.forEach(function(c){c.glow.setVisible(false);});}
-    this.drawRollers();
+    this.drawRollers();this.drawFever(time);
+    if(!fever&&this.comboL.text.indexOf("FEVER")===0)this.comboL.setText("COMBO");
+    /* patience des clients */
+    var urgent=false;
+    for(var p=0;p<G.pots.length;p++){
+      var o=G.pots[p];if(!o||o.done)continue;
+      if(!frozen)o.pat-=delta;
+      this.drawRing(this.potV[p],o);
+      if(o.pat/o.max<.25)urgent=true;
+      if(o.pat<=0){this.expire(p);if(this.ended)return;}
+    }
+    if(urgent&&time-this.lastUrg>900){this.lastUrg=time;this.sfx.tick();}
     /* déplacer les mots et alimenter le tapis */
     for(var k=0;k<this.slots.length;k++){
       var sl=this.slots[k],s=this.slotS(k);
@@ -466,11 +534,7 @@ class LoopScene extends Phaser.Scene{
       sl.prev=s;
     }
     if(this.hintUntil){var self2=this;Object.keys(this.chips).forEach(function(id){var c=self2.chips[id];if(self2.potIndex(self2.item(+id).word)>-1)c.glow.setVisible(true);});}
-    /* chrono */
-    var sec=Math.ceil(G.tLeft);
-    if(G.tLeft<=10&&sec!==this.lastTick&&sec>0){this.lastTick=sec;this.sfx.tick();this.tweens.add({targets:this.timeT,scale:{from:1.3,to:1},duration:250});}
     this.updateTop();
-    if(G.tLeft<=0){this.ended=true;this.finishLose("time");}
   }
 
   countdown(seq){
@@ -535,7 +599,7 @@ class LoopScene extends Phaser.Scene{
     var W=this.W,H=this.H;
     this.time.delayedCall(350,function(){
       var dim=self.add.rectangle(W/2,H/2,W,H,0x3A0A12,0).setDepth(50);self.tweens.add({targets:dim,fillAlpha:.55,duration:300});
-      var t=self.txt(W/2,H/2-40,reason==="tray"?"PLATEAU PLEIN !":"TEMPS ÉCOULÉ !",34,"#ffffff",{display:true,stroke:"#D1364A",sw:10}).setDepth(51).setScale(0);
+      var t=self.txt(W/2,H/2-40,reason==="tray"?"PLATEAU PLEIN !":reason==="hearts"?"PLUS DE VIES !":"TEMPS ÉCOULÉ !",34,"#ffffff",{display:true,stroke:"#D1364A",sw:10}).setDepth(51).setScale(0);
       self.tweens.add({targets:t,scale:1,duration:500,ease:"Bounce.Out"});
       var s=self.txt(W/2,H/2+6,G.served+" / "+G.orders.length+" commandes servies",16,"#ffffff").setDepth(51).setAlpha(0);
       self.tweens.add({targets:s,alpha:1,duration:300,delay:400});
