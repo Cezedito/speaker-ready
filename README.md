@@ -3,6 +3,8 @@
 Webapp pour progresser en anglais dans la communication des congrès médicaux : un programme d'un an (52 leçons hebdomadaires, A2 → B2) et des mini-jeux.
 
 ## Contenu
+- **Ma session du jour** (10 min) : révision espacée des mots dus (ils reviennent après 1, 3, 7, 14 puis 30 jours), nouveaux mots de la leçon en cours, mini-quiz et défi de jeu.
+- **Sauvegarde** : export/import de la progression (code ou fichier) depuis l'accueil.
 - **2 parcours thématiques** à suivre en parallèle : Marketing (12 leçons) et Anglais du quotidien au bureau (12 leçons : valider un plan de com' au téléphone, partager son écran, planifier une réunion, messages Slack/Teams…).
 - **52 leçons**, une par semaine, réparties en 4 trimestres :
   1. Les bases pro (A2) : se présenter, emails, téléphone, accueil, inscriptions, intervenants…

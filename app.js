@@ -42,7 +42,7 @@ var SVG={
 
 /* ===================== ÉTAT ===================== */
 var KEY="congress-english:v3";
-var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{}};
+var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{}};
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in S){if(o[k]!==undefined)S[k]=o[k];}}}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 save();
@@ -99,7 +99,7 @@ function renderHome(){
   var pace=dc>wk?"Tu es en avance sur le programme. Bravo !":dc===wk?"Leçon de la semaine faite, tu es à jour.":(dc===wk-1?"Tu es pile dans le rythme : une leçon cette semaine.":"Tu as "+(wk-1-dc)+" leçon"+(wk-1-dc>1?"s":"")+" de retard, rien de grave : avance à ton rythme.");
   var cq=nx?nx.q:4;
   view.innerHTML=
-   '<div class="bento">'+
+   '<div class="bento">'+sessTile()+
     '<div class="tile navy span2"><div class="tag">Programme annuel · semaine '+wk+' / 52</div>'+
       '<div class="hero-num"><b id="cnt" data-to="'+dc+'">'+dc+'</b><small>/ 52 leçons</small></div>'+
       '<div><div class="meter"><i style="width:'+pct+'%"></i></div><div class="meter-legend"><span>Semaine 1</span><span>Semaine 52</span></div></div>'+
@@ -112,8 +112,15 @@ function renderHome(){
     '<button class="tile cont span2" data-inboxmap="1"><span class="ico ibico">💬</span><span class="txt"><span class="tag">Inbox Race · '+ibTotal()+' ★</span><b>Continuer : '+ibDay(ibCurrent())+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
    '</div>'+
    '<h2>Parcours thématiques</h2><div class="stack">'+[5,6].map(function(q){var t=track(q),dn=t.filter(function(l){return valid(l.w);}).length,nx2=t.filter(function(l){return !valid(l.w);})[0];return '<button class="mod" data-quarter-open="'+q+'"><span class="num" style="font-size:13px">'+(q===5?'Mkt':'Bureau')+'</span><span><b>'+QNAMES[q]+'</b><span class="sub">'+(nx2?'Prochaine : '+esc(nx2.t):'Parcours terminé !')+'</span><span class="prog" style="display:block;margin-top:10px"><i style="width:'+Math.round(dn/t.length*100)+'%"></i></span><span class="sub" style="display:block;margin-top:6px;font-size:13px">'+dn+' / '+t.length+' leçons</span></span></button>';}).join('')+'</div>'+
-   '<h2>Trimestre '+cq+' · '+QNAMES[cq]+'</h2>'+lessonList(cq);
+   '<h2>Trimestre '+cq+' · '+QNAMES[cq]+'</h2>'+lessonList(cq)+backupHTML();
   countUp();
+}
+function sessTile(){
+  var p=sessPlan(),done=sessDoneToday(),parts=[];
+  if(p.due.length)parts.push(p.due.length+" mot"+(p.due.length>1?"s":"")+" à revoir");
+  if(p.nw.length)parts.push(p.nw.length+" nouveaux mots");
+  parts.push("quiz","défi");
+  return '<button class="tile cont span2 sesstile'+(done?" done":"")+'" data-session="1"><span class="ico cta">'+(done?"✓":SVG.play)+'</span><span class="txt"><span class="tag">'+(done?"Session du jour faite · série "+streak()+" 🔥":"Ma session du jour · 10 min")+'</span><b>'+(done?"Refaire une session":parts.join(" · "))+'</b></span><span class="chev" aria-hidden="true"></span></button>';
 }
 function countUp(){
   var el=$("#cnt");if(!el)return;var to=+el.dataset.to;
@@ -210,7 +217,7 @@ function renderQuizResult(){
 }
 function finishQuiz(){
   var z=overlay.q,s=z.res.filter(Boolean).length;z.done=true;markToday();
-  if(z.kind==="lesson"){S.done[z.w]=Math.max(S.done[z.w]===undefined?0:S.done[z.w],s);}
+  if(z.kind==="lesson"){S.done[z.w]=Math.max(S.done[z.w]===undefined?0:S.done[z.w],s);srsAddLesson(z.w);}
   else if(S.best===null||s>S.best)S.best=s;
   save();
 }
@@ -640,6 +647,113 @@ function renderInboxMap(){
    '<h2>Comment jouer</h2><div class="card"><p>Les messages de tes collègues, de l’agence, des sponsors ou des hôtesses arrivent sur Teams et WhatsApp, de plus en plus vite.</p><p>Réponds au message surligné en choisissant la bonne réponse anglaise. Une mauvaise réponse fait arriver le message suivant aussitôt.</p><p style="margin:0">Si le fil déborde, la journée est perdue. Vide-le pour un bonus <b>Inbox zero</b>, enchaîne pour les combos, et réponds en moins de 3 secondes pour le bonus <b>FAST!</b></p></div>';
 }
 
+/* ===================== RÉVISION ESPACÉE + SESSION DU JOUR ===================== */
+/* Chaque mot étudié entre dans une « boîte ». Bonne réponse : il monte d'une boîte et revient plus tard.
+   Erreur : il redescend et revient dès le lendemain. Intervalles en jours par boîte : */
+var SRS_INT=[0,1,3,7,14,30];
+function addDays(n){var d=new Date();d.setDate(d.getDate()+n);return dkey(d);}
+function srsAdd(ids){var t=today();ids.forEach(function(id){if(!S.srs[id])S.srs[id]={b:0,due:t};});}
+function srsAddLesson(w){srsAdd(WORDS.filter(function(x){return x.w===w;}).map(function(x){return x.id;}));}
+function srsDue(){var t=today();return Object.keys(S.srs).filter(function(id){return S.srs[id].due<=t&&BYID[id];}).sort(function(a,b){return S.srs[a].b-S.srs[b].b;});}
+function srsGrade(id,ok){
+  var c=S.srs[id]||(S.srs[id]={b:0,due:today()});
+  c.b=ok?Math.min(5,c.b+1):1;c.due=addDays(ok?SRS_INT[c.b]:1);
+  S.known[id]=ok&&c.b>=2?true:(ok?S.known[id]:false);
+}
+var BYID={};WORDS.forEach(function(x){BYID[x.id]=x;});
+Object.keys(S.done).forEach(function(w){srsAddLesson(+w);});
+function sessDoneToday(){return S.sess&&S.sess.date===today()&&S.sess.done;}
+function sessPlan(){
+  var due=srsDue().slice(0,12),nl=nextLesson(),nw=[];
+  if(nl){var ws=WORDS.filter(function(x){return x.w===nl.w;});if(ws.some(function(x){return !S.srs[x.id];}))nw=ws;}
+  return {due:due,nl:nl,nw:nw};
+}
+function startSession(){
+  var p=sessPlan(),steps=[];
+  if(p.due.length)steps.push("review");
+  if(p.nw.length)steps.push("learn");
+  var qpool=p.nw.concat(p.due.map(function(id){return BYID[id];}));
+  if(qpool.length<4)qpool=qpool.concat(shuffle(poolWords()).slice(0,6));
+  steps.push("quiz");steps.push("game");
+  var sw=shuffle(qpool).slice(0,5),qs=sw.map(function(w,i){return i%2?qFrEn(w,WORDS):qEnFr(w,WORDS);});
+  overlay={type:"session",s:{steps:steps,k:0,due:p.due,nw:p.nw,nl:p.nl,pos:0,flipped:false,ok:0,
+    quiz:{qs:qs,pos:0,res:[],locked:false,picked:null},learned:0}};
+}
+function sessStep(){var s=overlay.s;return s.steps[s.k];}
+function sessNext(){var s=overlay.s;s.k++;s.pos=0;s.flipped=false;if(sessStep()==="game"){S.sess={date:today(),done:true};markToday();save();}}
+function sessHeader(title){
+  var s=overlay.s,names={review:"Révision",learn:"Nouveaux mots",quiz:"Quiz",game:"Défi"};
+  return '<div class="qbar"><button class="back" data-quit="1">‹ Quitter</button><span class="tag">Session du jour</span></div>'+
+    '<div class="segs">'+s.steps.map(function(x,i){return '<i class="'+(i<s.k?"ok":i===s.k?"cur":"")+'"></i>';}).join("")+'</div>'+
+    '<div class="sesslab">'+s.steps.map(function(x,i){return '<span class="'+(i===s.k?"on":"")+'">'+names[x]+'</span>';}).join("")+'</div>'+
+    '<div class="qtext" style="margin-top:6px">'+title+'</div>';
+}
+function renderSession(){
+  var s=overlay.s,st=sessStep();
+  if(st==="review"){
+    var id=s.due[s.pos],w=BYID[id],box=(S.srs[id]||{}).b||0;
+    view.innerHTML=sessHeader("Révision · "+(s.pos+1)+" / "+s.due.length)+
+     '<p class="qhint">Ces mots reviennent aujourd’hui. Dis-toi la traduction, puis vérifie.</p>'+
+     (s.flipped?'<button class="flash navy flip" data-sflip="1"><span class="lab">Leçon '+lnum(BYW[w.w])+' · boîte '+box+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
+       :'<button class="card flash" data-sflip="1"><span class="pill neutral">Boîte '+box+' / 5</span><span class="term">'+esc(w.en)+'</span><span class="hint">Touche pour voir la traduction</span></button>')+
+     (s.flipped?'<div class="row2" style="margin-top:14px"><button class="btn" data-sgrade="0">Je ne savais pas</button><button class="btn primary" data-sgrade="1">Je savais ✓</button></div>'
+       :'<div class="actions"><button class="btn" data-say="'+esc(w.en)+'">'+SVG.sound+' Écouter</button><button class="btn primary" data-sflip="1">Voir la réponse</button></div>');
+    if(!s.flipped)speak(w.en);
+    return;
+  }
+  if(st==="learn"){
+    var w2=s.nw[s.pos];
+    view.innerHTML=sessHeader("Nouveaux mots · "+(s.pos+1)+" / "+s.nw.length)+
+     '<p class="qhint">Leçon '+lnum(s.nl)+' : '+esc(s.nl.t)+'</p>'+
+     '<div class="card flash learn"><span class="term">'+esc(w2.en)+'</span><span class="fr2">'+esc(w2.fr)+'</span><span class="ex2">« '+esc(w2.ex)+' »</span></div>'+
+     '<div class="row2" style="margin-top:14px"><button class="btn" data-say="'+esc(w2.ex)+'">'+SVG.sound+' La phrase</button><button class="btn primary" data-slearn="1">'+(s.pos<s.nw.length-1?"Mot suivant":"J’ai vu les 6 mots")+'</button></div>';
+    speak(w2.en);
+    return;
+  }
+  if(st==="quiz"){
+    var z=s.quiz,q=z.qs[z.pos],L="ABCD";
+    var opts=q.o.map(function(o,i){var cls="opt",dis="";if(z.locked){dis=" disabled";if(i===q.a)cls+=" ok";else if(i===z.picked)cls+=" ko";}
+      return '<button class="'+cls+'" data-sopt="'+i+'"'+dis+'><span class="l">'+L[i]+'</span><span>'+esc(o)+'</span></button>';}).join("");
+    var fb=z.locked?'<div class="feedback '+(z.picked===q.a?"good":"bad")+'"><b class="v">'+(z.picked===q.a?"Exact !":"Pas tout à fait")+'</b><p>'+q.ex+'</p></div><div class="actions"><button class="btn primary" data-sqnext="1">'+(z.pos<z.qs.length-1?"Question suivante":"Continuer")+'</button></div>':'';
+    view.innerHTML=sessHeader("Quiz · "+(z.pos+1)+" / "+z.qs.length)+'<div class="qtext" style="font-size:20px;margin-top:4px">'+esc(q.p)+'</div><div class="qhint">'+esc(q.h)+'</div><div class="opts">'+opts+'</div>'+fb;
+    return;
+  }
+  /* défi final */
+  var cl=currentLevel(),ib=ibCurrent(),rev=s.due.length,okq=s.quiz.res.filter(Boolean).length;
+  view.innerHTML=sessHeader("Session bouclée !")+
+   '<div class="tile navy span2" style="margin-top:6px"><div class="tag">Bravo, c’est fait pour aujourd’hui</div>'+
+   '<div class="lstats"><div><b>'+rev+'</b><span>mots révisés</span></div><div><b>'+s.nw.length+'</b><span>nouveaux mots</span></div><div><b>'+okq+'/'+s.quiz.qs.length+'</b><span>au quiz</span></div></div>'+
+   '<p>Série : '+streak()+' jour'+(streak()>1?"s":"")+' 🔥 · Prochaine révision : '+srsNextLabel()+'</p></div>'+
+   '<h2>Défi du jour (facultatif)</h2><div class="stack">'+
+   '<button class="mod" data-sgame="loop"><span class="num">🍲</span><span><b>Congress Loop</b><span class="sub">Monde '+cl.w+', niveau '+cl.i+'</span></span></button>'+
+   '<button class="mod" data-sgame="inbox"><span class="num">💬</span><span><b>Inbox Race</b><span class="sub">'+ibDay(ib)+'</span></span></button>'+
+   (s.nl&&!valid(s.nl.w)?'<button class="mod" data-open="'+s.nl.w+'"><span class="num">📖</span><span><b>Valider la leçon '+lnum(s.nl)+'</b><span class="sub">'+esc(s.nl.t)+' · la valider débloque les 6 mots suivants</span></span></button>':'')+
+   '</div><div class="actions"><button class="btn" data-quit="1">Terminer</button></div>';
+}
+function srsNextLabel(){
+  var t=today(),next=null;Object.keys(S.srs).forEach(function(id){var d=S.srs[id].due;if(d>t&&(!next||d<next))next=d;});
+  if(!next)return "demain";var days=Math.round((new Date(next+"T00:00:00")-new Date(t+"T00:00:00"))/864e5);
+  return days<=1?"demain":"dans "+days+" jours";
+}
+
+/* ===================== SAUVEGARDE DE LA PROGRESSION ===================== */
+var backupMode=null,backupMsg="";
+function exportCode(){return "SR1:"+btoa(unescape(encodeURIComponent(JSON.stringify(S))));}
+function importCode(code){
+  code=(code||"").trim();if(code.indexOf("SR1:")!==0)throw new Error("format");
+  var o=JSON.parse(decodeURIComponent(escape(atob(code.slice(4)))));
+  if(!o||typeof o!=="object"||!o.done)throw new Error("contenu");
+  for(var k in o)S[k]=o[k];save();
+}
+function backupHTML(){
+  var out='<h2>Ma progression</h2><div class="card"><p style="margin:0 0 12px">Ta progression est enregistrée sur cet appareil. Sauvegarde-la de temps en temps pour la retrouver si tu changes de téléphone.</p>'+
+    '<div class="row2"><button class="btn" data-backup="export">Exporter</button><button class="btn" data-backup="import">Importer</button></div>';
+  if(backupMode==="export")out+='<textarea class="codebox" id="bcode" readonly>'+exportCode()+'</textarea><div class="row2"><button class="btn primary" data-backup="copy">Copier le code</button><button class="btn" data-backup="file">Télécharger</button></div>';
+  if(backupMode==="import")out+='<textarea class="codebox" id="bin" placeholder="Colle ici ton code de sauvegarde (il commence par SR1:)"></textarea><div class="actions" style="margin-top:10px"><button class="btn primary" data-backup="restore">Restaurer</button></div>';
+  if(backupMsg)out+='<p class="tag" style="margin:10px 0 0">'+esc(backupMsg)+'</p>';
+  return out+'</div>';
+}
+
 /* ===================== RENDU ===================== */
 var view=$("#view"),prevKey=null;
 function render(){
@@ -649,6 +763,7 @@ function render(){
   renderTabs();$("#htitle").textContent=TITLES[tab];
   if(overlay){
     if(overlay.type==="quiz")renderQuiz();
+    else if(overlay.type==="session")renderSession();
     else if(overlay.type==="loop")renderLoop();
     else if(overlay.type==="inbox")renderInbox();
     else{var g=overlay.g;({memory:renderMemory,chrono:renderChrono,scramble:renderScramble,dictee:renderDictee})[g.id](g);}
@@ -658,7 +773,7 @@ function render(){
   else if(tab==="review")renderReview();
   else if(tab==="games")(loopMap?renderLoopMap():inboxMap?renderInboxMap():renderGames());
   else renderOral();
-  var key=overlay?(overlay.type==="inbox"?"I"+overlay.G.i+overlay.G.status:overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"")+(inboxMap?"ib"+inboxWeek:"");
+  var key=overlay?(overlay.type==="session"?"S"+overlay.s.k+"-"+overlay.s.pos+"-"+(overlay.s.quiz.pos):overlay.type==="inbox"?"I"+overlay.G.i+overlay.G.status:overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"")+(inboxMap?"ib"+inboxWeek:"");
   if(key!==prevKey){view.classList.remove("v-fade","v-up");void view.offsetWidth;view.classList.add(overlay?"v-up":"v-fade");}
   prevKey=key;
 }
@@ -700,12 +815,30 @@ document.addEventListener("click",function(e){
   if(d.loopcont){loopContinue();return;}
   if(d.loopmute){S.loop.mute=!S.loop.mute;save();render();return;}
   if(d.buy){var bb=d.buy;if(S.loop.coins>=BOOST[bb].p){S.loop.coins-=BOOST[bb].p;S.loop.b[bb]=(S.loop.b[bb]||0)+1;save();sfx.pop();render();}return;}
+  /* session du jour */
+  if(d.session)return go(function(){tab="home";startSession();});
+  if(d.sflip){overlay.s.flipped=!overlay.s.flipped;render();return;}
+  if(d.sgrade!==undefined){var ss=overlay.s,gid=ss.due[ss.pos];srsGrade(gid,d.sgrade==="1");if(d.sgrade==="1")ss.ok++;save();
+    return go(function(){ss.pos++;ss.flipped=false;if(ss.pos>=ss.due.length)sessNext();});}
+  if(d.slearn){var sl=overlay.s;return go(function(){sl.pos++;if(sl.pos>=sl.nw.length){srsAdd(sl.nw.map(function(x){return x.id;}));save();sessNext();}});}
+  if(d.sopt!==undefined){var sz=overlay.s.quiz;if(sz.locked)return;var sq=sz.qs[sz.pos],si=+d.sopt;sz.locked=true;sz.picked=si;sz.res.push(si===sq.a);speak(sq.say);render();return;}
+  if(d.sqnext){var sq2=overlay.s.quiz;return go(function(){if(sq2.pos<sq2.qs.length-1){sq2.pos++;sq2.locked=false;sq2.picked=null;}else sessNext();});}
+  if(d.sgame==="loop"){var c0=currentLevel();return go(function(){tab="games";loopMap=true;loopWorld=c0.w;startLoop(c0.w,c0.i);});}
+  if(d.sgame==="inbox"){var i0=ibCurrent();return go(function(){tab="games";inboxMap=true;inboxWeek=Math.ceil(i0/5);startInbox(i0);});}
+  /* sauvegarde */
+  if(d.backup){
+    var bm=d.backup;
+    if(bm==="export"||bm==="import"){backupMode=backupMode===bm?null:bm;backupMsg="";render();return;}
+    if(bm==="copy"){var ta=$("#bcode");try{navigator.clipboard.writeText(ta.value).then(function(){backupMsg="Code copié. Garde-le dans tes notes ou envoie-le-toi par message.";render();},function(){ta.select();backupMsg="Sélectionne le code et copie-le.";render();});}catch(e){ta.select();}return;}
+    if(bm==="file"){var blob=new Blob([exportCode()],{type:"text/plain"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="speaker-ready-sauvegarde-"+today()+".txt";document.body.appendChild(a);a.click();a.remove();backupMsg="Fichier téléchargé.";render();return;}
+    if(bm==="restore"){try{importCode($("#bin").value);backupMode=null;backupMsg="Progression restaurée ✓";buildDeck();}catch(e){backupMsg="Ce code n’est pas valide. Vérifie qu’il est complet et commence par SR1:.";}render();return;}
+  }
   /* révision */
   if(d.scope)return go(function(){R.scope=d.scope;buildDeck();});
   if(d.onlynew)return go(function(){R.onlyNew=!R.onlyNew;buildDeck();});
   if(d.flip){R.flipped=!R.flipped;render();return;}
   if(d.mark!==undefined){
-    var w=R.deck[R.pos%R.deck.length];if(!w)return;S.known[w.id]=d.mark==="1";markToday();save();
+    var w=R.deck[R.pos%R.deck.length];if(!w)return;S.known[w.id]=d.mark==="1";if(S.srs[w.id])srsGrade(w.id,d.mark==="1");else if(d.mark==="0")srsAdd([w.id]);markToday();save();
     if(R.onlyNew&&d.mark==="1"){R.deck.splice(R.pos%R.deck.length,1);if(R.deck.length)R.pos=R.pos%R.deck.length;}else R.pos++;
     R.flipped=false;render();return;}
   /* jeux */
