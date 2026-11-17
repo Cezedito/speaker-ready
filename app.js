@@ -42,7 +42,7 @@ var SVG={
 
 /* ===================== ÉTAT ===================== */
 var KEY="congress-english:v3";
-var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{}};
+var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{},calls:{}};
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in S){if(o[k]!==undefined)S[k]=o[k];}}}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 save();
@@ -250,6 +250,8 @@ function renderGames(){
    '<span class="lstats"><span><b>'+cl.w+'-'+cl.i+'</b><span>niveau</span></span><span><b>'+ts+'</b><span>étoiles</span></span><span><b>'+S.loop.coins+'</b><span>pièces</span></span></span><span class="btn primary">'+SVG.play+' Jouer</span></button>'+
    '<button class="tile navy loopcard ibcard" data-inboxmap="1"><span class="tag">Jeu à niveaux · Teams & WhatsApp</span><span class="lt">Inbox Race</span><span class="ld">Réponds aux messages avant que ton fil déborde.</span>'+
    '<span class="lstats"><span><b>S'+Math.ceil(ibCurrent()/5)+' · '+DAYS[(ibCurrent()-1)%5].slice(0,3)+'.</b><span>journée</span></span><span><b>'+ibTotal()+'</b><span>étoiles</span></span><span><b>'+S.loop.coins+'</b><span>pièces</span></span></span><span class="btn primary">'+SVG.play+' Jouer</span></button>'+
+'<button class="tile navy loopcard callcard" data-callsmap="1"><span class="tag">Jeu de rôle · 10 appels</span><span class="lt">Le Coup de fil</span><span class="ld">Décroche, réponds… et dis-le à voix haute.</span>'+
+   '<span class="lstats"><span><b>'+callStars()+'</b><span>étoiles / 30</span></span><span><b>'+Object.keys(S.calls).length+'</b><span>appels réussis</span></span><span><b>'+S.loop.coins+'</b><span>pièces</span></span></span><span class="btn primary">✆ Appeler</span></button>'+
    '<h2>Jeux rapides</h2><div class="card" style="margin-bottom:12px"><p style="margin:0">'+src+'</p></div><div class="stack">'+GAMES.map(function(g,i){
     var b=S.games[g.id];
     return '<button class="mod" data-game="'+g.id+'"><span class="num">'+(i+1)+'</span><span><b>'+g.n+'</b><span class="sub">'+g.s+'</span>'+(b!==undefined?'<span style="display:block;margin-top:8px"><span class="pill good">Record : '+g.best(b)+'</span></span>':'')+'</span></button>';}).join("")+'</div>';
@@ -805,6 +807,7 @@ function renderSession(){
    '<h2>Défi du jour (facultatif)</h2><div class="stack">'+
    '<button class="mod" data-sgame="loop"><span class="num">🍲</span><span><b>Congress Loop</b><span class="sub">Monde '+cl.w+', niveau '+cl.i+'</span></span></button>'+
    '<button class="mod" data-tab="oral"><span class="num">🎙️</span><span><b>Expression orale</b><span class="sub">'+oralToday()+' / '+ORAL_GOAL+' phrases dites aujourd’hui</span></span></button>'+
+   '<button class="mod" data-callplay="'+callNext()+'"><span class="num">📞</span><span><b>Le Coup de fil</b><span class="sub">'+esc(callList()[callNext()].name+" · "+callList()[callNext()].title)+'</span></span></button>'+
    '<button class="mod" data-sgame="inbox"><span class="num">💬</span><span><b>Inbox Race</b><span class="sub">'+ibDay(ib)+'</span></span></button>'+
    (s.nl&&!valid(s.nl.w)?'<button class="mod" data-open="'+s.nl.w+'"><span class="num">📖</span><span><b>Valider la leçon '+lnum(s.nl)+'</b><span class="sub">'+esc(s.nl.t)+' · la valider débloque les 6 mots suivants</span></span></button>':'')+
    '</div><div class="actions"><button class="btn" data-quit="1">Terminer</button></div>';
@@ -833,16 +836,168 @@ function backupHTML(){
   return out+'</div>';
 }
 
+/* ===================== LE COUP DE FIL ===================== */
+if(!S.calls||typeof S.calls!=="object")S.calls={};
+var callsMap=false,callTimer=null,ringTimer=null;
+var CALL_TIME={1:15,2:12,3:10},LVNAME={1:"Facile",2:"Moyen",3:"Difficile"},SATD={2:20,1:8,0:0,"-1":-12,"-2":-22};
+function callList(){return window.CALLS||[];}
+function callUnlocked(k){return k===0||(S.calls[callList()[k-1].id]||0)>0;}
+function callNext(){var L=callList();for(var k=0;k<L.length;k++)if(!S.calls[L[k].id])return k;return 0;}
+function callStars(){var t=0;for(var k in S.calls)t+=S.calls[k];return t;}
+function satFace(v){return v>=75?"😀":v>=55?"🙂":v>=35?"😐":"😠";}
+function callRoot(){var el=document.getElementById("callroot");if(!el){el=document.createElement("div");el.id="callroot";document.body.appendChild(el);}return el;}
+function callClose(){clearInterval(callTimer);clearInterval(ringTimer);callTimer=ringTimer=null;if(window.speechSynthesis)speechSynthesis.cancel();var el=document.getElementById("callroot");if(el)el.remove();}
+function speakThen(text,cb,rate){
+  var done=false,fin=function(){if(done)return;done=true;cb&&cb();};
+  var est=900+text.split(/\s+/).length*330/(rate||.95);
+  if(window.speechSynthesis&&HAS_TTS){try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(text);u.lang=enVoice?enVoice.lang:"en-GB";if(enVoice)u.voice=enVoice;u.rate=rate||.95;u.onend=function(){setTimeout(fin,250);};speechSynthesis.speak(u);}catch(e){}}
+  setTimeout(fin,est+1500);
+}
+function startCall(k){
+  callClose();var sc=callList()[k];
+  overlay={type:"call",C:{k:k,sc:sc,phase:"ring",t:0,sat:50,log:[],cc:sc.lv<3,timeouts:0,start:0,speaking:false}};
+  ringTimer=setInterval(function(){tone([440,480],.35,"sine",.06,.0);setTimeout(function(){tone([440,480],.35,"sine",.06,0);},450);},2200);
+  tone([440,480],.35,"sine",.06,0);
+}
+function callAccept(){var C=overlay.C;clearInterval(ringTimer);ringTimer=null;C.start=Date.now();callSay(C.sc.turns[0].c,function(){callChoose();});}
+function callSay(line,cb){var C=overlay.C;C.phase="talk";C.line=line;C.speaking=true;render();speakThen(line[0],function(){if(!overlay||overlay.C!==C)return;C.speaking=false;cb&&cb();},C.sc.lv===3?1:.95);}
+function callChoose(){
+  var C=overlay.C,turn=C.sc.turns[C.t];C.phase="choose";C.opts=shuffle(turn.o.map(function(o,i){return {o:o,i:i};}));C.left=CALL_TIME[C.sc.lv];C.tmax=C.left;render();
+  clearInterval(callTimer);
+  callTimer=setInterval(function(){
+    if(!overlay||overlay.type!=="call"||overlay.C!==C||C.phase!=="choose"){clearInterval(callTimer);return;}
+    C.left-=.1;var b=document.getElementById("ctbar");if(b)b.style.width=Math.max(0,C.left/C.tmax*100)+"%";
+    if(C.left<=0){clearInterval(callTimer);C.timeouts++;C.sat=Math.max(0,C.sat-15);C.log.push({t:C.t,timeout:true});tone([200,160],.15,"square",.05,.12);
+      callSay(["Hello? Are you still there?","Allô ? Vous êtes toujours là ?"],function(){if(C.timeouts>=2){C.timeouts=0;callAdvance();}else callChoose();});}
+  },100);
+}
+function callPick(j){
+  var C=overlay.C;if(C.phase!=="choose")return;clearInterval(callTimer);
+  var pick=C.opts[j],o=pick.o,turn=C.sc.turns[C.t];C.timeouts=0;
+  C.sat=Math.max(0,Math.min(100,C.sat+(SATD[o[2]]||0)));
+  var entry={t:C.t,c:turn.c,o:o,best:turn.o.filter(function(x){return x[2]===2;})[0]};C.log.push(entry);C.cur=entry;
+  tone(o[2]>=1?[660,880]:o[2]===0?[520]:[220,180],.1,o[2]>=1?"triangle":"square",.06,.08);
+  if(CAN_REC&&!S.oral.callSkip){C.phase="speak";render();callRecStart(entry);}
+  else callReact();
+}
+function callRecStart(entry){
+  var C=overlay.C,go2=function(stream){
+    O.stream=stream;var chunks=[],types=["audio/mp4","audio/webm;codecs=opus","audio/webm"],mt=null;
+    for(var k=0;k<types.length;k++){try{if(MediaRecorder.isTypeSupported(types[k])){mt=types[k];break;}}catch(e){}}
+    var rec;try{rec=mt?new MediaRecorder(stream,{mimeType:mt}):new MediaRecorder(stream);}catch(e){callReact();return;}
+    C.rec=rec;rec.ondataavailable=function(ev){if(ev.data&&ev.data.size)chunks.push(ev.data);};
+    rec.onstop=function(){var blob=new Blob(chunks,{type:rec.mimeType||mt||"audio/mp4"});entry.blob=blob;entry.url=URL.createObjectURL(blob);callJudge(entry);callReact();};
+    rec.start();C.recAt=Date.now();
+    C.recTo=setTimeout(function(){if(rec.state==="recording")rec.stop();},12000);
+  };
+  if(window.speechSynthesis)speechSynthesis.cancel();
+  if(O.stream&&O.stream.active)go2(O.stream);
+  else navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(go2,function(e){entry.micErr=micError(e);callReact();});
+}
+function callRecStop(skip){var C=overlay.C;clearTimeout(C.recTo);if(skip)C.cur.skipped=true;if(C.rec&&C.rec.state==="recording")C.rec.stop();else callReact();}
+function callJudge(entry){
+  if(!S.oral.asr||!window.SRJudge||!entry.blob||entry.skipped)return;
+  var C=overlay.C;
+  SRJudge.transcribe(entry.blob).then(function(txt){
+    entry.heard=txt;entry.judge=SRJudge.judge(entry.o[0],txt);
+    if(!overlay||overlay.C!==C)return;
+    var sc=entry.judge.score;
+    if(sc>=75){C.sat=Math.min(100,C.sat+5);callToast("Prononciation claire · "+sc+"/100 · +5 😀");}
+    else if(sc<40)callToast("Pas très clair · "+sc+"/100");
+    else callToast("Prononciation · "+sc+"/100");
+    var m=document.getElementById("csat");if(m)m.outerHTML=satHTML(C.sat);
+  },function(){});
+}
+function callToast(t){var el=document.createElement("div");el.className="ctoast";el.textContent=t;var root=document.getElementById("callroot");if(root){root.appendChild(el);setTimeout(function(){el.remove();},2600);}}
+function callReact(){
+  var C=overlay.C;if(!C||C.phase==="end"||C.phase==="done")return;
+  var o=C.cur&&C.cur.o;
+  if(o&&o[3]){callSay(o[3],function(){callAdvance();});}
+  else{C.phase="talk";C.line=null;render();setTimeout(function(){if(overlay&&overlay.C===C)callAdvance();},500);}
+}
+function callAdvance(){
+  var C=overlay.C;C.t++;
+  if(C.t>=C.sc.turns.length){callFinish(false);return;}
+  callSay(C.sc.turns[C.t].c,function(){callChoose();});
+}
+function callFinish(hung){
+  var C=overlay.C;clearInterval(callTimer);
+  var stars=hung?0:C.sat>=80?3:C.sat>=55?2:C.sat>=30?1:0;
+  C.stars=stars;C.hung=hung;C.dur=Math.round((Date.now()-(C.start||Date.now()))/1000);
+  var prev=S.calls[C.sc.id]||0;C.newBest=stars>prev;if(stars>prev)S.calls[C.sc.id]=stars;
+  C.coins=stars?10+stars*10:0;S.loop.coins+=C.coins;markToday();save();
+  if(hung){C.phase="done";render();return;}
+  var e=C.sat>=75?C.sc.end.good:C.sat>=45?C.sc.end.ok:C.sc.end.bad;
+  C.endLine=e;callSay(e,function(){C.phase="done";tone([523,659,784],.12,"triangle",.1,.1);render();});
+  C.phase="end";
+}
+function satHTML(v){var col=v>=75?"#2F9E66":v>=55?"#8BC34A":v>=35?"#F2A33A":"#D1364A";return '<div class="csat" id="csat"><span>'+satFace(v)+'</span><div class="csatbar"><i style="width:'+v+'%;background:'+col+'"></i></div></div>';}
+function fmtDur(s){var m=Math.floor(s/60),x=s%60;return m+":"+(x<10?"0":"")+x;}
+function renderCall(){
+  var C=overlay.C,sc=C.sc,root=callRoot();view.innerHTML="";
+  var head='<div class="ctop"><div class="cav" style="background:'+sc.col+'">'+sc.av+'</div><div class="cname">'+esc(sc.name)+'</div><div class="crole">'+esc(sc.role)+'</div></div>';
+  if(C.phase==="ring"){
+    root.className="callscr ring";
+    root.innerHTML='<div class="cinc">Appel entrant…</div>'+head+'<div class="cgoal"><b>'+esc(sc.title)+'</b><span>'+esc(sc.goal)+'</span></div>'+
+      '<div class="cbtns"><button class="cbtn red" data-quit="1">✕<span>Refuser</span></button><button class="cbtn green pulse" data-cacc="1">✆<span>Décrocher</span></button></div>';
+    return;
+  }
+  if(C.phase==="done"){
+    root.className="callscr done";
+    var res=C.hung?"Appel raccroché":C.stars>=3?"Appel parfait !":C.stars===2?"Bon appel":C.stars===1?"Appel moyen":"Client mécontent";
+    root.innerHTML='<div class="cdone"><div class="cav sm" style="background:'+sc.col+'">'+sc.av+'</div><div class="ctitle">'+res+'</div>'+
+      '<div class="cstars">'+[1,2,3].map(function(k){return '<span class="'+(k<=C.stars?"on":"")+'">★</span>';}).join("")+'</div>'+
+      '<div class="lstats"><div><b>'+satFace(C.sat)+' '+C.sat+'%</b><span>satisfaction</span></div><div><b>'+fmtDur(C.dur)+'</b><span>durée</span></div><div><b>+'+C.coins+'</b><span>pièces</span></div></div>'+
+      (C.endLine?'<p class="cend">« '+esc(C.endLine[0])+' »<br><i>'+esc(C.endLine[1])+'</i></p>':'')+
+      '<div class="cact"><button class="btn primary" data-callplay="'+C.k+'">Rappeler</button>'+(C.k<callList().length-1&&C.stars?'<button class="btn" data-callplay="'+(C.k+1)+'">Appel suivant</button>':'')+'<button class="btn" data-callsmap="1">Répertoire</button></div>'+
+      '<h2>Transcription de l’appel</h2><div class="ctrans">'+C.log.map(function(e,i){
+        if(e.timeout)return '<div class="tl miss">⏱ Silence… le client a dû relancer.</div>';
+        var q=e.o[2],cls=q>=2?"best":q>=1?"ok":"bad";
+        return '<div class="tl"><div class="tc"><b>'+esc(sc.name)+'</b> '+esc(e.c[0])+'<i>'+esc(e.c[1])+'</i></div>'+
+          '<div class="tm '+cls+'"><b>Toi</b> '+esc(e.o[0])+'<i>'+esc(e.o[1])+'</i>'+
+          (e.url?'<button class="cplay" data-cplay="'+i+'">▶ ma voix</button>':'')+(e.judge?'<span class="cjs">🤖 '+e.judge.score+'/100</span>':'')+'</div>'+
+          (q<2&&e.best?'<div class="tbest">💡 Mieux : '+esc(e.best[0])+'<button class="cplay" data-say="'+esc(e.best[0])+'">🔊</button></div>':'')+'</div>';}).join("")+'</div></div>';
+    return;
+  }
+  root.className="callscr live";
+  var dur=C.start?fmtDur(Math.round((Date.now()-C.start)/1000)):"0:00";
+  var mid="";
+  if(C.phase==="talk"||C.phase==="end"){
+    mid='<div class="cwave'+(C.speaking?" on":"")+'"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>'+
+      (C.line?'<div class="csub">'+(C.cc?'<b>'+esc(C.line[0])+'</b>':'<b class="hidden-cc">Sous-titres masqués</b>')+(C.cc?'<i>'+esc(C.line[1])+'</i>':'')+'</div>':'');
+  }else if(C.phase==="choose"){
+    var line=C.sc.turns[C.t].c;
+    mid='<div class="csub small">'+(C.cc?'<b>'+esc(line[0])+'</b>':'<b class="hidden-cc">Sous-titres masqués</b>')+'<button class="crep" data-say="'+esc(line[0])+'">↺ Réécouter</button></div>'+
+      '<div class="ctimer"><i id="ctbar" style="width:'+Math.max(0,C.left/C.tmax*100)+'%"></i></div>'+
+      '<div class="copts">'+C.opts.map(function(p,j){return '<button class="copt" data-cpick="'+j+'">'+esc(p.o[0])+'</button>';}).join("")+'</div>';
+  }else if(C.phase==="speak"){
+    mid='<div class="cspeak"><span class="tag">À toi de le dire !</span><b>'+esc(C.cur.o[0])+'</b><div class="micbtn on" style="margin:18px auto 8px">'+SVG.oral+'</div><span class="rectime"><i></i>enregistrement…</span></div>'+
+      '<div class="cact row"><button class="btn primary" data-cdone="1">J’ai fini</button><button class="btn" data-cskip="1">Passer</button></div>';
+  }
+  root.innerHTML='<div class="cbar"><span>'+dur+'</span><button class="ccbtn'+(C.cc?" on":"")+'" data-ccc="1">CC</button></div>'+head+satHTML(C.sat)+'<div class="cmid">'+mid+'</div>'+
+    '<div class="cbtns bottom"><button class="cbtn red" data-chang="1">✆<span>Raccrocher</span></button></div>';
+}
+function renderCallsMap(){
+  var L=callList(),nx=callNext(),groups=[1,2,3];
+  view.innerHTML='<div class="gamebar"><button class="back" data-callsback="1">‹ Jeux</button><span class="tag">'+callStars()+' / '+(L.length*3)+' ★</span></div>'+
+   '<div class="qtext" style="margin-top:0">Le Coup de fil</div>'+
+   '<div class="card" style="margin-bottom:6px"><p style="margin:0">Décroche, écoute ton interlocuteur et choisis ta réponse avant la fin du chrono. Puis <b>dis-la à voix haute</b> : avec l’écoute automatique activée, une prononciation claire rend le client plus content.</p>'+
+   '<label class="cskiptog"><input type="checkbox" data-skiporal="1"'+(S.oral.callSkip?" checked":"")+'> Mode discret : ne pas parler (dans le métro…)</label></div>'+
+   groups.map(function(g){return '<h2>'+LVNAME[g]+(g===3?" · sans sous-titres":"")+'</h2><div class="stack list">'+L.map(function(c,k){if(c.lv!==g)return "";var un=callUnlocked(k),st=S.calls[c.id]||0;
+     return '<button class="les ccontact'+(un?"":" locked")+(k===nx&&!st?" cur":"")+'" '+(un?'data-callplay="'+k+'"':'disabled')+'><span class="cav xs" style="background:'+c.col+'">'+(un?c.av:"🔒")+'</span><span><b>'+esc(c.name)+'</b><span class="fr">'+esc(c.title)+'</span></span><span class="ns">'+starsHTML(st)+'</span></button>';}).join("")+'</div>';}).join("");
+}
+
 /* ===================== RENDU ===================== */
 var view=$("#view"),prevKey=null;
 function render(){
   var inov=!!overlay;
   document.body.classList.toggle("inquiz",inov);
-  $("#hdr").style.display=(inov||(tab==="lessons"&&route.lesson)||(tab==="games"&&(loopMap||inboxMap)))?"none":"";
+  $("#hdr").style.display=(inov||(tab==="lessons"&&route.lesson)||(tab==="games"&&(loopMap||inboxMap||callsMap)))?"none":"";
   renderTabs();$("#htitle").textContent=TITLES[tab];
   if(overlay){
     if(overlay.type==="quiz")renderQuiz();
     else if(overlay.type==="session")renderSession();
+    else if(overlay.type==="call")renderCall();
     else if(overlay.type==="loop")renderLoop();
     else if(overlay.type==="inbox")renderInbox();
     else{var g=overlay.g;({memory:renderMemory,chrono:renderChrono,scramble:renderScramble,dictee:renderDictee})[g.id](g);}
@@ -850,9 +1005,9 @@ function render(){
   else if(tab==="home")renderHome();
   else if(tab==="lessons")renderLessons();
   else if(tab==="review")renderReview();
-  else if(tab==="games")(loopMap?renderLoopMap():inboxMap?renderInboxMap():renderGames());
+  else if(tab==="games")(loopMap?renderLoopMap():inboxMap?renderInboxMap():callsMap?renderCallsMap():renderGames());
   else renderOral();
-  var key=overlay?(overlay.type==="session"?"S"+overlay.s.k+"-"+overlay.s.pos+"-"+(overlay.s.quiz.pos):overlay.type==="inbox"?"I"+overlay.G.i+overlay.G.status:overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"")+(inboxMap?"ib"+inboxWeek:"");
+  var key=overlay?(overlay.type==="call"?"C"+overlay.C.k:overlay.type==="session"?"S"+overlay.s.k+"-"+overlay.s.pos+"-"+(overlay.s.quiz.pos):overlay.type==="inbox"?"I"+overlay.G.i+overlay.G.status:overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"")+(inboxMap?"ib"+inboxWeek:"")+(callsMap?"calls":"");
   if(key!==prevKey){view.classList.remove("v-fade","v-up");void view.offsetWidth;view.classList.add(overlay?"v-up":"v-fade");}
   prevKey=key;
 }
@@ -864,12 +1019,13 @@ document.addEventListener("submit",function(e){
   var v=$("#dinput").value;g.val=v;
   var ok=normW(v)===normW(head(g.list[g.pos].en));if(ok)g.score++;g.checked=ok?"ok":"ko";render();
 });
+document.addEventListener("change",function(e){if(e.target&&e.target.dataset&&e.target.dataset.skiporal){S.oral.callSkip=e.target.checked;save();}});
 document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay&&overlay.g)overlay.g.val=e.target.value;});
 
 document.addEventListener("click",function(e){
   var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
   if(el.form&&el.type==="submit")return;
-  if(d.tab)return go(function(){stopTimer();stopRaf();overlay=null;loopMap=false;inboxMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
+  if(d.tab)return go(function(){stopTimer();stopRaf();callClose();overlay=null;loopMap=false;inboxMap=false;callsMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
   if(d.say!==undefined){speak(d.say);return;}
   if(d.open!==undefined){if(!d.open)return;return go(function(){overlay=null;tab="lessons";route.lesson=+d.open;quarterSel=BYW[+d.open].q;});}
   if(d.back)return go(function(){route.lesson=null;});
@@ -881,11 +1037,22 @@ document.addEventListener("click",function(e){
     var z=overlay.q;if(z.locked)return;var q=z.qs[z.pos],i=+d.opt;z.locked=true;z.picked=i;z.res.push(i===q.a);speak(q.say);render();return;}
   if(d.qnext){var zq=overlay.q;if(zq.pos<zq.qs.length-1)return go(function(){zq.pos++;zq.locked=false;zq.picked=null;});return go(finishQuiz);}
   if(d.again)return go(function(){var z=overlay.q;overlay={type:"quiz",q:z.kind==="lesson"?lessonQuiz(z.w):reviewQuiz()};});
-  if(d.quit)return go(function(){stopTimer();var t0=overlay&&overlay.type;stopRaf();overlay=null;if(t0==="loop"){tab="games";loopMap=true;}if(t0==="inbox"){tab="games";inboxMap=true;}});
+  if(d.quit)return go(function(){stopTimer();var t0=overlay&&overlay.type;stopRaf();callClose();overlay=null;if(t0==="call"){tab="games";callsMap=true;}if(t0==="loop"){tab="games";loopMap=true;}if(t0==="inbox"){tab="games";inboxMap=true;}});
   if(d.inboxmap)return go(function(){stopRaf();overlay=null;tab="games";loopMap=false;inboxMap=true;});
   if(d.inboxback)return go(function(){inboxMap=false;});
   if(d.inboxweek)return go(function(){inboxWeek=+d.inboxweek;});
   if(d.inboxplay)return go(function(){tab="games";loopMap=false;inboxMap=true;inboxWeek=Math.ceil(+d.inboxplay/5);startInbox(+d.inboxplay);});
+  /* le coup de fil */
+  if(d.callsmap)return go(function(){callClose();stopRaf();overlay=null;tab="games";loopMap=false;inboxMap=false;callsMap=true;});
+  if(d.callsback)return go(function(){callsMap=false;});
+  if(d.callplay!==undefined)return go(function(){tab="games";loopMap=false;inboxMap=false;callsMap=true;startCall(+d.callplay);});
+  if(d.cacc){callAccept();return;}
+  if(d.cpick!==undefined){callPick(+d.cpick);return;}
+  if(d.cdone){callRecStop(false);return;}
+  if(d.cskip){callRecStop(true);return;}
+  if(d.chang){if(window.speechSynthesis)speechSynthesis.cancel();callFinish(true);return;}
+  if(d.ccc){overlay.C.cc=!overlay.C.cc;render();return;}
+  if(d.cplay!==undefined){var en=overlay.C.log[+d.cplay];if(en&&en.url){if(window.speechSynthesis)speechSynthesis.cancel();new Audio(en.url).play().catch(function(){});}return;}
   /* congress loop */
   if(d.loopmap)return go(function(){stopRaf();overlay=null;tab="games";inboxMap=false;loopMap=true;});
   if(d.loopback)return go(function(){loopMap=false;});
