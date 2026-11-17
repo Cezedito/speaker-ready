@@ -124,6 +124,7 @@ function speak(t,rate,cb){
     var p=a.play();if(p&&p.catch)p.catch(function(){if(my===VSEQ)ttsSpeak(t,rate,done);});
   }else ttsSpeak(t,rate,done);
 }
+window.__vkey=function(t){return vkey(t);};window.__hasVoice=function(t){return !!VOICE[vkey(t)];};
 function speakSeq(list,rate){var i=0,next=function(){if(i<list.length)speak(list[i++],rate,function(){setTimeout(next,250);});};next();}
 /* liste de tout ce que l'appli peut lire (sert à préparer les fichiers audio) */
 window.__speechTexts=function(){
