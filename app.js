@@ -378,7 +378,7 @@ function renderDictee(g){
 var ORAL_GOAL=10;
 if(!S.oral||typeof S.oral!=="object")S.oral={};
 if(!S.oral.srs)S.oral.srs={};
-var O={mode:"repeat",item:null,phase:"prompt",url:null,err:null,stream:null,rec:null,chunks:[],t0:0,tick:null};
+var O={mode:"repeat",item:null,phase:"prompt",url:null,blob:null,judge:null,err:null,stream:null,rec:null,chunks:[],t0:0,tick:null};
 var ORAL_MODES=[["repeat","Répéter","Écoute la phrase, puis répète-la à voix haute."],["translate","Traduire à l'oral","Lis la phrase en français et dis-la en anglais."],["respond","Répondre","Un collègue t'écrit : réponds à voix haute, comme en vrai."]];
 var CAN_REC=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
 function oralToday(){if(S.oral.d!==today()){S.oral.d=today();S.oral.n=0;}return S.oral.n||0;}
@@ -390,7 +390,7 @@ function oralPool(){
 function nextOral(){
   var pool=oralPool(),t=today(),due=pool.filter(function(it){var c=S.oral.srs[oralKey(it)];return c&&c.due<=t;});
   var src=due.length?due:pool,c;do{c=pick(src);}while(O.item&&c.en===O.item.en&&src.length>1);
-  O.item=c;O.phase="prompt";O.err=null;if(O.url){try{URL.revokeObjectURL(O.url);}catch(e){}}O.url=null;
+  O.item=c;O.phase="prompt";O.err=null;O.judge=null;O.blob=null;if(O.url){try{URL.revokeObjectURL(O.url);}catch(e){}}O.url=null;
 }
 function stopStream(){if(O.rec&&O.rec.state==="recording"){try{O.rec.stop();}catch(e){}}if(O.stream){O.stream.getTracks().forEach(function(t){t.stop();});O.stream=null;}clearInterval(O.tick);}
 function micError(e){
@@ -408,7 +408,7 @@ function recStart(){
     for(var k=0;k<types.length;k++){try{if(MediaRecorder.isTypeSupported(types[k])){mt=types[k];break;}}catch(e){}}
     try{O.rec=mt?new MediaRecorder(stream,{mimeType:mt}):new MediaRecorder(stream);}catch(e){O.err=micError(e);render();return;}
     O.rec.ondataavailable=function(ev){if(ev.data&&ev.data.size)O.chunks.push(ev.data);};
-    O.rec.onstop=function(){clearInterval(O.tick);var blob=new Blob(O.chunks,{type:(O.rec&&O.rec.mimeType)||mt||"audio/mp4"});O.url=URL.createObjectURL(blob);O.phase="review";render();};
+    O.rec.onstop=function(){clearInterval(O.tick);var blob=new Blob(O.chunks,{type:(O.rec&&O.rec.mimeType)||mt||"audio/mp4"});O.url=URL.createObjectURL(blob);O.blob=blob;O.judge=null;O.phase="review";render();if(S.oral.asr)runJudge();};
     O.rec.start();O.phase="rec";O.t0=Date.now();render();
     O.tick=setInterval(function(){var el=$("#rect");var sec=Math.floor((Date.now()-O.t0)/1000);if(el)el.textContent="0:"+(sec<10?"0":"")+sec;if(sec>=20)recStop();},250);
   };
@@ -416,6 +416,32 @@ function recStart(){
   else navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(go2,function(e){O.err=micError(e);O.phase="prompt";render();});
 }
 function recStop(){if(O.rec&&O.rec.state==="recording"){try{O.rec.stop();}catch(e){}}}
+function runJudge(){
+  if(!window.SRJudge||!O.blob)return;
+  var it=O.item,files={};
+  O.judge={state:SRJudge.ready()?"run":"load",pct:0};render();
+  SRJudge.transcribe(O.blob,function(e){
+    if(!e)return;
+    if(e.status==="progress"&&e.total){files[e.file]=[e.loaded,e.total];var L=0,T=0;for(var f in files){L+=files[f][0];T+=files[f][1];}O.judge.pct=Math.round(L/T*100);var el=$("#asrp");if(el)el.textContent=O.judge.pct+" %";}
+    if(e.status==="ready"){O.judge.state="run";var el2=$("#asrs");if(el2)el2.textContent="J’écoute ta réponse…";}
+  }).then(function(txt){if(O.item!==it||!O.judge)return;O.judge={state:"done",heard:txt,res:SRJudge.judge(it.en,txt)};render();},
+    function(e){if(O.item!==it)return;O.judge={state:"err",msg:String((e&&e.message)||e)};render();});
+}
+function judgeHTML(){
+  var j=O.judge,m=O.mode;
+  if(!window.SRJudge)return "";
+  if(!S.oral.asr)return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p>Active l’écoute automatique : l’appli transcrit ta voix et note ta prononciation, pour un avis neutre en plus du tien.</p><p class="tag" style="margin:0 0 12px">Premier usage : environ 70 Mo à télécharger une seule fois (en Wi-Fi de préférence). Ensuite tout se passe sur ton téléphone.</p><button class="btn primary" data-asron="1">Activer l’écoute automatique</button></div>';
+  if(!j)return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><button class="btn" data-asrrun="1">Analyser mon enregistrement</button></div>';
+  if(j.state==="load")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p id="asrs">Téléchargement du modèle d’écoute (une seule fois)… <b id="asrp">'+(j.pct||0)+' %</b></p><div class="spin"></div></div>';
+  if(j.state==="run")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p id="asrs">J’écoute ta réponse…</p><div class="spin"></div></div>';
+  if(j.state==="err")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p>L’analyse n’a pas pu se faire. Vérifie ta connexion pour le premier téléchargement, puis réessaie.</p><p class="tag" style="margin:0 0 10px">'+esc(j.msg)+'</p><button class="btn" data-asrrun="1">Réessayer</button></div>';
+  var r=j.res,col=r.score>=85?"good":r.score>=55?"warn":"bad";
+  return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli'+(m==="respond"?" · indicatif":"")+'</span>'+
+    '<div class="jrow"><div class="jscore '+col+'"><b>'+r.score+'</b><small>/100</small></div><div><b class="jverdict">'+r.verdict+'</b>'+
+    '<div class="jwords">'+r.tw.map(function(x){return '<span class="'+(x.ok?"hit":"miss")+'">'+esc(x.w)+'</span>';}).join(" ")+'</div></div></div>'+
+    '<p class="jheard">Entendu : « '+esc(j.heard||"…")+' »</p>'+
+    (m==="respond"?'<p class="tag" style="margin:6px 0 0">Réponse libre : le score mesure la proximité avec l’exemple, pas la justesse de ta réponse.</p>':(m==="translate"?'<p class="tag" style="margin:6px 0 0">Une autre formulation correcte peut avoir un score plus bas : fie-toi aussi à ton jugement.</p>':''))+'</div>';
+}
 function playMine(){if(!O.url)return;if(window.speechSynthesis)speechSynthesis.cancel();var a=new Audio(O.url);a.play().catch(function(){});}
 function oralGrade(g){
   var key=oralKey(O.item),c=S.oral.srs[key]||{b:0,due:today()};
@@ -443,8 +469,9 @@ function renderOral(){
     body=(m==="repeat"?'':'<div class="box key omodel"><span class="lab">'+modelLab+'</span><b>'+esc(it.en)+'</b>'+(m!=="repeat"?'<span class="muted">'+(m==="respond"?"":esc(it.fr))+'</span>':'')+
       (m==="respond"?'<span class="muted" style="font-size:13px">D’autres réponses sont possibles : compare le sens, pas mot pour mot.</span>':'')+'</div>')+
       '<div class="row3"><button class="btn" data-say="'+esc(it.en)+'">'+SVG.sound+' Modèle</button><button class="btn" data-oslow="1">'+SVG.slow+' Lent</button><button class="btn" data-omine="1"'+(O.url?"":" disabled")+'>🎙️ Ma voix</button></div>'+
+      judgeHTML()+
       '<p class="qhint center" style="margin:16px 0 8px">Compare les deux. Comment c’était ?</p>'+
-      '<div class="row3 ograde"><button class="btn" data-ograde="0">😕<span>À revoir</span></button><button class="btn" data-ograde="1">🙂<span>Presque</span></button><button class="btn primary" data-ograde="2">😎<span>Parfait</span></button></div>'+
+      '<div class="row3 ograde">'+[["0","😕","À revoir"],["1","🙂","Presque"],["2","😎","Parfait"]].map(function(g){var sug=O.judge&&O.judge.state==="done"&&O.judge.res.grade===+g[0];return '<button class="btn'+(g[0]==="2"?" primary":"")+(sug?" sugg":"")+'" data-ograde="'+g[0]+'">'+g[1]+'<span>'+g[2]+'</span>'+(sug?'<em>avis de l’appli</em>':'')+'</button>';}).join("")+'</div>'+
       '<div class="actions" style="margin-top:10px"><button class="btn" data-orestart="1">↺ Réessayer</button></div>';
   }
   view.innerHTML=chips+goal+(O.err?'<div class="note">'+esc(O.err)+'</div>':'')+
@@ -912,7 +939,9 @@ document.addEventListener("click",function(e){
   if(d.recstop){recStop();return;}
   if(d.omine){playMine();return;}
   if(d.ograde!==undefined){var gg=+d.ograde;return go(function(){O.ohint=false;oralGrade(gg);});}
-  if(d.orestart){O.phase="prompt";render();return;}
+  if(d.orestart){O.phase="prompt";O.judge=null;render();return;}
+  if(d.asron){S.oral.asr=true;save();runJudge();return;}
+  if(d.asrrun){runJudge();return;}
   if(d.onext)return go(function(){O.ohint=false;nextOral();});
   if(d.ohint){O.ohint=true;render();return;}
 });

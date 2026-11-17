@@ -16,7 +16,7 @@ Webapp pour progresser en anglais dans la communication des congrès médicaux :
 - **Congress Loop**, jeu à niveaux (moteur Phaser 4) : des mots anglais tournent sur un tapis en boucle, il faut servir les commandes en français des marmites avant que le plateau d'attente déborde. 90 niveaux en 6 mondes (un par trimestre, plus les mondes Marketing et Bureau débloqués d'office), étoiles, combos, pièces et bonus (Indice, Gel, Case), niveaux à l'écoute et niveaux inversés.
 - **Inbox Race**, jeu à niveaux (Phaser) : des messages Teams et WhatsApp arrivent de plus en plus vite, il faut choisir la bonne réponse anglaise avant que le fil déborde. 20 journées sur 4 semaines, 72 conversations, combos, bonus FAST! et Inbox zero.
 - **4 jeux rapides** : Paires, Vrai ou faux chrono, Phrase en désordre, Dictée.
-- **Expression orale** : 3 exercices (Répéter, Traduire à l'oral, Répondre à un message Teams/WhatsApp). Sa voix est enregistrée puis comparée au modèle, avec auto-évaluation et révision espacée. Fonctionne dans l'appli installée sur iPhone (la reconnaissance vocale du navigateur n'y est pas disponible).
+- **Expression orale** : 3 exercices (Répéter, Traduire à l'oral, Répondre à un message Teams/WhatsApp). Sa voix est enregistrée puis comparée au modèle, avec auto-évaluation et révision espacée. Fonctionne dans l'appli installée sur iPhone (la reconnaissance vocale du navigateur n'y est pas disponible). Option « écoute automatique » : le modèle Whisper tiny.en tourne directement sur le téléphone (transformers.js + ONNX Runtime Web), transcrit la voix et donne un score ; ~70 Mo téléchargés une seule fois.
 - Progression enregistrée dans le navigateur (leçons, mots maîtrisés, records, série de jours).
 
 ## Fichiers
@@ -24,6 +24,7 @@ Webapp pour progresser en anglais dans la communication des congrès médicaux :
 |---|---|
 | `index.html` | Page et design |
 | `manifest.webmanifest`, `icon-*.png`, `apple-touch-icon.png`, `favicon-32.png` | Nom, icône et installation sur l'écran d'accueil |
+| `asr.js`, `ortwasm/` | Écoute automatique de l'oral : Whisper (MIT) via transformers.js 4.3.2 (Apache 2.0, chargé depuis jsDelivr) et ONNX Runtime Web (MIT) |
 | `phaser.min.js` | Moteur de jeu Phaser 4.2.1 (licence MIT), utilisé par Congress Loop |
 | `inbox-phaser.js`, `inbox-data.js` | Jeu Inbox Race et ses conversations (format décrit en tête de fichier) |
 | `loop-phaser.js` | Scène de jeu de Congress Loop (tapis, marmites, combos, effets, sons) |

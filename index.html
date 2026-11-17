@@ -413,6 +413,22 @@ nav.tabs .in{position:relative;display:grid;grid-template-columns:repeat(5,1fr)}
 .omodel b{font-family:var(--f-display);font-size:20px;line-height:26px;letter-spacing:-.4px}
 .ograde .btn{flex-direction:column;gap:2px;font-size:22px;min-height:64px}
 .ograde .btn span{font-size:13px;font-weight:600}
+
+.ojudge{margin-top:14px;padding:16px 18px}
+.ojudge .lab{display:block;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#5B5FC7;margin-bottom:8px}
+.ojudge p{margin:0 0 8px;font-size:15px}
+.jrow{display:grid;grid-template-columns:76px 1fr;gap:14px;align-items:center}
+.jscore{width:76px;height:76px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:5px solid var(--good)}
+.jscore b{font-family:var(--f-display);font-size:26px;line-height:1}.jscore small{font-size:11px;color:var(--muted);font-weight:600}
+.jscore.warn{border-color:#F2A33A}.jscore.bad{border-color:var(--bad)}
+.jverdict{font-family:var(--f-display);font-size:18px;display:block;margin-bottom:6px}
+.jwords{font-size:15px;font-weight:600;line-height:1.5}
+.jwords .hit{color:var(--good-ink)}.jwords .miss{color:var(--bad-ink);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.jheard{font-size:14px!important;color:var(--muted);margin:10px 0 0!important}
+.spin{width:28px;height:28px;border-radius:50%;border:3px solid var(--line);border-top-color:#5B5FC7;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ograde .btn.sugg{outline:3px solid #5B5FC7;outline-offset:2px;position:relative}
+.ograde .btn em{position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-style:normal;font-size:10px;font-weight:700;background:#5B5FC7;color:#fff;border-radius:99px;padding:2px 7px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -431,6 +447,7 @@ nav.tabs .in{position:relative;display:grid;grid-template-columns:repeat(5,1fr)}
 <script src="loop-phaser.js"></script>
 <script src="inbox-data.js"></script>
 <script src="inbox-phaser.js"></script>
+<script src="asr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
