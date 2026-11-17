@@ -16,7 +16,7 @@ Webapp pour progresser en anglais dans la communication des congrès médicaux :
 - **Congress Loop**, jeu à niveaux (moteur Phaser 4) : des mots anglais tournent sur un tapis en boucle, il faut servir les commandes en français des marmites avant que le plateau d'attente déborde. 90 niveaux en 6 mondes (un par trimestre, plus les mondes Marketing et Bureau débloqués d'office), étoiles, combos, pièces et bonus (Indice, Gel, Case), niveaux à l'écoute et niveaux inversés.
 - **Inbox Race**, jeu à niveaux (Phaser) : des messages Teams et WhatsApp arrivent de plus en plus vite, il faut choisir la bonne réponse anglaise avant que le fil déborde. 20 journées sur 4 semaines, 72 conversations, combos, bonus FAST! et Inbox zero.
 - **4 jeux rapides** : Paires, Vrai ou faux chrono, Phrase en désordre, Dictée.
-- **Oral** : écoute et répétition au micro avec score mot par mot (Chrome / Safari).
+- **Expression orale** : 3 exercices (Répéter, Traduire à l'oral, Répondre à un message Teams/WhatsApp). Sa voix est enregistrée puis comparée au modèle, avec auto-évaluation et révision espacée. Fonctionne dans l'appli installée sur iPhone (la reconnaissance vocale du navigateur n'y est pas disponible).
 - Progression enregistrée dans le navigateur (leçons, mots maîtrisés, records, série de jours).
 
 ## Fichiers

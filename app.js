@@ -78,7 +78,7 @@ var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 /* ===================== NAVIGATION ===================== */
 var tab="home",route={lesson:null},quarterSel=null,overlay=null,timerId=null;
 var TABS=[["home","Accueil"],["lessons","Leçons"],["review","Révision"],["games","Jeux"],["oral","Oral"]];
-var TITLES={home:"Accueil",lessons:"Leçons",review:"Révision",games:"Mini-jeux",oral:"Prononciation"};
+var TITLES={home:"Accueil",lessons:"Leçons",review:"Révision",games:"Mini-jeux",oral:"Expression orale"};
 function renderTabs(){
   var box=$("#tabs");
   if(!box.dataset.built){box.innerHTML='<span class="ind" id="ind" aria-hidden="true"></span>'+TABS.map(function(t){return '<button class="tab" data-tab="'+t[0]+'">'+SVG[t[0]]+'<span>'+t[1]+'</span></button>';}).join("");box.dataset.built="1";}
@@ -371,35 +371,86 @@ function renderDictee(g){
   if(!g.checked){var inp=$("#dinput");if(inp&&!("ontouchstart" in window))inp.focus();}
 }
 
-/* ===================== ORAL ===================== */
-var O={cur:null,listening:false,heard:null,err:null};
-function nextPhrase(){var pool=poolPhrases(),c;do{c=pick(pool);}while(O.cur&&c===O.cur&&pool.length>1);O.cur=c;O.heard=null;O.err=null;}
-function norm(s){return s.toLowerCase().replace(/[’]/g,"'").replace(/[^a-z0-9' ]/g," ").split(/\s+/).filter(Boolean);}
+/* ===================== ORAL =====================
+   La reconnaissance vocale du navigateur ne marche pas dans une web app installée sur iPhone.
+   On enregistre donc la voix (MediaRecorder), on la fait écouter à côté du modèle, et elle s'auto-évalue.
+   Les phrases travaillées reviennent ensuite en révision espacée. */
+var ORAL_GOAL=10;
+if(!S.oral||typeof S.oral!=="object")S.oral={};
+if(!S.oral.srs)S.oral.srs={};
+var O={mode:"repeat",item:null,phase:"prompt",url:null,err:null,stream:null,rec:null,chunks:[],t0:0,tick:null};
+var ORAL_MODES=[["repeat","Répéter","Écoute la phrase, puis répète-la à voix haute."],["translate","Traduire à l'oral","Lis la phrase en français et dis-la en anglais."],["respond","Répondre","Un collègue t'écrit : réponds à voix haute, comme en vrai."]];
+var CAN_REC=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
+function oralToday(){if(S.oral.d!==today()){S.oral.d=today();S.oral.n=0;}return S.oral.n||0;}
+function oralKey(it){return O.mode+":"+it.en;}
+function oralPool(){
+  if(O.mode==="respond")return (window.INBOX||[]).filter(function(m){return m[7]<=2||Math.random()<.5;}).map(function(m){return {en:m[4],fr:m[3],prompt:m[2],from:m[1],app:m[0]};});
+  return poolPhrases().map(function(p){return {en:p.en,fr:p.fr,w:p.w};});
+}
+function nextOral(){
+  var pool=oralPool(),t=today(),due=pool.filter(function(it){var c=S.oral.srs[oralKey(it)];return c&&c.due<=t;});
+  var src=due.length?due:pool,c;do{c=pick(src);}while(O.item&&c.en===O.item.en&&src.length>1);
+  O.item=c;O.phase="prompt";O.err=null;if(O.url){try{URL.revokeObjectURL(O.url);}catch(e){}}O.url=null;
+}
+function stopStream(){if(O.rec&&O.rec.state==="recording"){try{O.rec.stop();}catch(e){}}if(O.stream){O.stream.getTracks().forEach(function(t){t.stop();});O.stream=null;}clearInterval(O.tick);}
+function micError(e){
+  var n=(e&&e.name)||"";
+  if(n==="NotAllowedError"||n==="SecurityError")return "L’accès au micro a été refusé. Sur iPhone : Réglages › Safari › Micro, choisis « Demander » ou « Autoriser », puis réessaie.";
+  if(n==="NotFoundError")return "Aucun micro détecté sur cet appareil.";
+  return "Impossible de démarrer le micro ("+(n||"erreur")+"). Ferme puis rouvre l’appli et réessaie.";
+}
+function recStart(){
+  if(!CAN_REC){O.phase="review";render();return;}
+  if(window.speechSynthesis)speechSynthesis.cancel();
+  var go2=function(stream){
+    O.stream=stream;O.chunks=[];
+    var types=["audio/mp4","audio/webm;codecs=opus","audio/webm","audio/ogg"],mt=null;
+    for(var k=0;k<types.length;k++){try{if(MediaRecorder.isTypeSupported(types[k])){mt=types[k];break;}}catch(e){}}
+    try{O.rec=mt?new MediaRecorder(stream,{mimeType:mt}):new MediaRecorder(stream);}catch(e){O.err=micError(e);render();return;}
+    O.rec.ondataavailable=function(ev){if(ev.data&&ev.data.size)O.chunks.push(ev.data);};
+    O.rec.onstop=function(){clearInterval(O.tick);var blob=new Blob(O.chunks,{type:(O.rec&&O.rec.mimeType)||mt||"audio/mp4"});O.url=URL.createObjectURL(blob);O.phase="review";render();};
+    O.rec.start();O.phase="rec";O.t0=Date.now();render();
+    O.tick=setInterval(function(){var el=$("#rect");var sec=Math.floor((Date.now()-O.t0)/1000);if(el)el.textContent="0:"+(sec<10?"0":"")+sec;if(sec>=20)recStop();},250);
+  };
+  if(O.stream&&O.stream.active)go2(O.stream);
+  else navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(go2,function(e){O.err=micError(e);O.phase="prompt";render();});
+}
+function recStop(){if(O.rec&&O.rec.state==="recording"){try{O.rec.stop();}catch(e){}}}
+function playMine(){if(!O.url)return;if(window.speechSynthesis)speechSynthesis.cancel();var a=new Audio(O.url);a.play().catch(function(){});}
+function oralGrade(g){
+  var key=oralKey(O.item),c=S.oral.srs[key]||{b:0,due:today()};
+  c.b=g===2?Math.min(5,c.b+2):g===1?Math.max(1,c.b):0;c.due=addDays(g===0?1:SRS_INT[Math.max(1,c.b)]);
+  S.oral.srs[key]=c;oralToday();S.oral.n=(S.oral.n||0)+1;markToday();save();nextOral();
+}
 function renderOral(){
-  if(!O.cur)nextPhrase();
-  var c=O.cur,res="";
-  if(O.heard){
-    var t=norm(c.en),hs={};norm(O.heard).forEach(function(w){hs[w]=1;});
-    var hits=t.filter(function(w){return hs[w];}).length,pct=Math.round(hits/t.length*100);
-    var v=pct>=85?["good","Excellent !"]:pct>=60?["","Pas mal"]:["bad","On réessaie"];
-    res='<div class="feedback '+v[0]+'"><b class="v">'+v[1]+' · '+pct+' %</b><div class="heard">'+t.map(function(w){return '<span class="'+(hs[w]?"hit":"miss")+'">'+esc(w)+'</span>';}).join(" ")+'</div><p class="muted" style="margin-top:8px">Entendu : « '+esc(O.heard)+' »</p></div>';
+  if(!O.item)nextOral();
+  var it=O.item,m=O.mode,n=oralToday(),pct=Math.min(100,Math.round(n/ORAL_GOAL*100)),desc=ORAL_MODES.filter(function(x){return x[0]===m;})[0][2];
+  var chips='<div class="chips">'+ORAL_MODES.map(function(x){return '<button class="chip'+(x[0]===m?" on":"")+'" data-omode="'+x[0]+'">'+x[1]+'</button>';}).join("")+'</div>';
+  var goal='<div class="card ogoal"><div class="ogoal-h"><span class="tag">Objectif du jour</span><b>'+n+' / '+ORAL_GOAL+' phrases dites'+(n>=ORAL_GOAL?" 🎉":"")+'</b></div><div class="prog"><i style="width:'+pct+'%"></i></div></div>';
+  var prompt;
+  if(m==="repeat")prompt='<span class="pill">Leçon '+lnum(BYW[it.w])+' · '+esc(BYW[it.w].t)+'</span><div class="phrase">'+esc(it.en)+'</div><p class="muted" style="margin:0">'+esc(it.fr)+'</p>';
+  else if(m==="translate")prompt='<span class="pill">Dis-le en anglais</span><div class="phrase fr">'+esc(it.fr)+'</div>';
+  else prompt='<div class="omsg"><span class="oapp '+(it.app==="t"?"t":"w")+'">'+(it.app==="t"?"T":"✆")+'</span><div><span class="ofrom">'+esc(it.from)+(it.app==="t"?" · Teams":" · WhatsApp")+'</span><div class="otext">'+esc(it.prompt)+'</div></div></div>';
+  var listenBtn=(m!=="translate"||O.phase==="review")?'<button class="btn" data-say="'+esc(m==="respond"&&O.phase!=="review"?it.prompt:it.en)+'">'+SVG.sound+' Écouter</button>':'';
+  var body="";
+  if(O.phase==="prompt"){
+    body='<div class="micwrap"><button class="micbtn" data-recstart="1" aria-label="Enregistrer">'+SVG.oral+'</button><span class="tag">'+(CAN_REC?"Appuie et parle":"Dis-le à voix haute, puis touche le micro")+'</span></div>'+
+      '<div class="row2">'+(listenBtn||'<button class="btn" data-ohint="1">Un indice</button>')+'<button class="btn" data-onext="1">Passer</button></div>';
+  }else if(O.phase==="rec"){
+    body='<div class="micwrap"><button class="micbtn on" data-recstop="1" aria-label="Arrêter">■</button><span class="rectime"><i></i><b id="rect">0:00</b> · touche pour arrêter</span></div>';
+  }else{
+    var modelLab=m==="repeat"?"La phrase":m==="translate"?"Réponse attendue":"Exemple de réponse";
+    body=(m==="repeat"?'':'<div class="box key omodel"><span class="lab">'+modelLab+'</span><b>'+esc(it.en)+'</b>'+(m!=="repeat"?'<span class="muted">'+(m==="respond"?"":esc(it.fr))+'</span>':'')+
+      (m==="respond"?'<span class="muted" style="font-size:13px">D’autres réponses sont possibles : compare le sens, pas mot pour mot.</span>':'')+'</div>')+
+      '<div class="row3"><button class="btn" data-say="'+esc(it.en)+'">'+SVG.sound+' Modèle</button><button class="btn" data-oslow="1">'+SVG.slow+' Lent</button><button class="btn" data-omine="1"'+(O.url?"":" disabled")+'>🎙️ Ma voix</button></div>'+
+      '<p class="qhint center" style="margin:16px 0 8px">Compare les deux. Comment c’était ?</p>'+
+      '<div class="row3 ograde"><button class="btn" data-ograde="0">😕<span>À revoir</span></button><button class="btn" data-ograde="1">🙂<span>Presque</span></button><button class="btn primary" data-ograde="2">😎<span>Parfait</span></button></div>'+
+      '<div class="actions" style="margin-top:10px"><button class="btn" data-orestart="1">↺ Réessayer</button></div>';
   }
-  view.innerHTML=(SR?'':'<div class="note">La reconnaissance vocale n’est pas disponible sur ce navigateur. Utilise Chrome, ou Safari récent. L’écoute fonctionne quand même.</div>')+
-   (O.err?'<div class="note">'+esc(O.err)+'</div>':'')+
-   '<div class="card speak"><span class="pill">Leçon '+c.w+' · '+esc(BYW[c.w].t)+'</span><div class="phrase">'+esc(c.en)+'</div><p class="muted" style="margin:0">'+esc(c.fr)+'</p></div>'+
-   '<div class="row2" style="margin-top:12px"><button class="btn" data-say="'+esc(c.en)+'">'+SVG.sound+' Écouter</button><button class="btn" data-oslow="1">'+SVG.slow+' Lentement</button></div>'+
-   '<div class="actions" style="margin-top:12px"><button class="btn primary'+(O.listening?" rec-on":"")+'" data-rec="1"'+(SR&&!O.listening?"":" disabled")+'>'+SVG.oral+(O.listening?" J’écoute…":" À toi de répéter")+'</button></div>'+
-   res+'<div class="actions"><button class="btn" data-nextphrase="1">Autre phrase</button></div>';
+  view.innerHTML=chips+goal+(O.err?'<div class="note">'+esc(O.err)+'</div>':'')+
+    '<p class="qhint" style="margin:4px 4px 10px">'+desc+'</p><div class="card speak">'+prompt+(O.ohint&&O.phase==="prompt"?'<p class="muted" style="margin:10px 0 0">Commence par : <b>'+esc(it.en.split(" ").slice(0,3).join(" "))+'…</b></p>':'')+'</div>'+body;
+  if(O.phase==="review"&&O.autoplay){O.autoplay=false;setTimeout(function(){speak(it.en,.95);},250);}
 }
-function listen(){
-  var rec=new SR();rec.lang="en-GB";rec.interimResults=false;rec.maxAlternatives=1;
-  O.listening=true;O.err=null;render();
-  rec.onresult=function(e){O.heard=e.results[0][0].transcript;markToday();};
-  rec.onerror=function(e){O.listening=false;O.err="Micro indisponible ("+e.error+"). Autorise l’accès au micro dans le navigateur.";render();};
-  rec.onend=function(){if(!O.listening)return;O.listening=false;render();};
-  try{rec.start();}catch(err){O.listening=false;render();}
-}
-
 
 /* ===================== CONGRESS LOOP (jeu à niveaux) =====================
    Des mots anglais défilent sur un tapis roulant. Chaque marmite affiche une commande
@@ -726,6 +777,7 @@ function renderSession(){
    '<p>Série : '+streak()+' jour'+(streak()>1?"s":"")+' 🔥 · Prochaine révision : '+srsNextLabel()+'</p></div>'+
    '<h2>Défi du jour (facultatif)</h2><div class="stack">'+
    '<button class="mod" data-sgame="loop"><span class="num">🍲</span><span><b>Congress Loop</b><span class="sub">Monde '+cl.w+', niveau '+cl.i+'</span></span></button>'+
+   '<button class="mod" data-tab="oral"><span class="num">🎙️</span><span><b>Expression orale</b><span class="sub">'+oralToday()+' / '+ORAL_GOAL+' phrases dites aujourd’hui</span></span></button>'+
    '<button class="mod" data-sgame="inbox"><span class="num">💬</span><span><b>Inbox Race</b><span class="sub">'+ibDay(ib)+'</span></span></button>'+
    (s.nl&&!valid(s.nl.w)?'<button class="mod" data-open="'+s.nl.w+'"><span class="num">📖</span><span><b>Valider la leçon '+lnum(s.nl)+'</b><span class="sub">'+esc(s.nl.t)+' · la valider débloque les 6 mots suivants</span></span></button>':'')+
    '</div><div class="actions"><button class="btn" data-quit="1">Terminer</button></div>';
@@ -790,7 +842,7 @@ document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay
 document.addEventListener("click",function(e){
   var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
   if(el.form&&el.type==="submit")return;
-  if(d.tab)return go(function(){stopTimer();stopRaf();overlay=null;loopMap=false;inboxMap=false;tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
+  if(d.tab)return go(function(){stopTimer();stopRaf();overlay=null;loopMap=false;inboxMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
   if(d.say!==undefined){speak(d.say);return;}
   if(d.open!==undefined){if(!d.open)return;return go(function(){overlay=null;tab="lessons";route.lesson=+d.open;quarterSel=BYW[+d.open].q;});}
   if(d.back)return go(function(){route.lesson=null;});
@@ -854,9 +906,15 @@ document.addEventListener("click",function(e){
   if(d.dhint){overlay.g.hint=true;render();return;}
   if(d.dnext){var g4=overlay.g;if(g4.pos<g4.list.length-1)return go(function(){g4.pos++;g4.checked=null;g4.hint=false;g4.val="";setTimeout(function(){speak(head(g4.list[g4.pos].en),.85);},300);});return go(function(){g4.done=true;gameRecord("dictee",g4.score,true);});}
   /* oral */
-  if(d.oslow){speak(O.cur.en,.7);return;}
-  if(d.rec&&SR&&!O.listening){listen();return;}
-  if(d.nextphrase)return go(nextPhrase);
+  if(d.oslow){speak(O.item.en,.7);return;}
+  if(d.omode)return go(function(){O.mode=d.omode;O.item=null;O.ohint=false;nextOral();});
+  if(d.recstart){O.ohint=false;O.autoplay=true;recStart();return;}
+  if(d.recstop){recStop();return;}
+  if(d.omine){playMine();return;}
+  if(d.ograde!==undefined){var gg=+d.ograde;return go(function(){O.ohint=false;oralGrade(gg);});}
+  if(d.orestart){O.phase="prompt";render();return;}
+  if(d.onext)return go(function(){O.ohint=false;nextOral();});
+  if(d.ohint){O.ohint=true;render();return;}
 });
 
 buildDeck();render();
