@@ -42,7 +42,7 @@ var SVG={
 
 /* ===================== ÉTAT ===================== */
 var KEY="congress-english:v3";
-var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{}};
+var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{}};
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in S){if(o[k]!==undefined)S[k]=o[k];}}}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 save();
@@ -109,7 +109,7 @@ function renderHome(){
     '<div class="tile"><span class="ico">'+SVG.fire+'</span><div class="kpi">'+st+'<small>jour'+(st>1?"s":"")+'</small></div><div class="tag">Série en cours</div></div>'+
     '<div class="tile"><span class="ico">'+SVG.review+'</span><div class="kpi">'+kc+'<small>/ '+WORDS.length+'</small></div><div class="tag">Mots maîtrisés</div></div>'+
     '<button class="tile cont span2" data-loopmap="1"><span class="ico">'+SVG.dice+'</span><span class="txt"><span class="tag">Congress Loop · '+totalStars()+' ★</span><b>Continuer : monde '+currentLevel().w+', niveau '+currentLevel().i+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
-    '<button class="tile cont span2" data-game="'+gd.id+'"><span class="ico">'+SVG.games+'</span><span class="txt"><span class="tag">Jeu rapide du jour</span><b>'+gd.n+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
+    '<button class="tile cont span2" data-inboxmap="1"><span class="ico ibico">💬</span><span class="txt"><span class="tag">Inbox Race · '+ibTotal()+' ★</span><b>Continuer : '+ibDay(ibCurrent())+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
    '</div>'+
    '<h2>Parcours thématiques</h2><div class="stack">'+[5,6].map(function(q){var t=track(q),dn=t.filter(function(l){return valid(l.w);}).length,nx2=t.filter(function(l){return !valid(l.w);})[0];return '<button class="mod" data-quarter-open="'+q+'"><span class="num" style="font-size:13px">'+(q===5?'Mkt':'Bureau')+'</span><span><b>'+QNAMES[q]+'</b><span class="sub">'+(nx2?'Prochaine : '+esc(nx2.t):'Parcours terminé !')+'</span><span class="prog" style="display:block;margin-top:10px"><i style="width:'+Math.round(dn/t.length*100)+'%"></i></span><span class="sub" style="display:block;margin-top:6px;font-size:13px">'+dn+' / '+t.length+' leçons</span></span></button>';}).join('')+'</div>'+
    '<h2>Trimestre '+cq+' · '+QNAMES[cq]+'</h2>'+lessonList(cq);
@@ -241,6 +241,8 @@ function renderGames(){
   var cl=currentLevel(),ts=totalStars();
   view.innerHTML='<button class="tile navy loopcard" data-loopmap="1"><span class="tag">Jeu à niveaux · '+(WORLDS.length*LV_PER_WORLD)+' niveaux</span><span class="lt">Congress Loop</span><span class="ld">Sers les bonnes commandes avant que le plateau déborde.</span>'+
    '<span class="lstats"><span><b>'+cl.w+'-'+cl.i+'</b><span>niveau</span></span><span><b>'+ts+'</b><span>étoiles</span></span><span><b>'+S.loop.coins+'</b><span>pièces</span></span></span><span class="btn primary">'+SVG.play+' Jouer</span></button>'+
+   '<button class="tile navy loopcard ibcard" data-inboxmap="1"><span class="tag">Jeu à niveaux · Teams & WhatsApp</span><span class="lt">Inbox Race</span><span class="ld">Réponds aux messages avant que ton fil déborde.</span>'+
+   '<span class="lstats"><span><b>S'+Math.ceil(ibCurrent()/5)+' · '+DAYS[(ibCurrent()-1)%5].slice(0,3)+'.</b><span>journée</span></span><span><b>'+ibTotal()+'</b><span>étoiles</span></span><span><b>'+S.loop.coins+'</b><span>pièces</span></span></span><span class="btn primary">'+SVG.play+' Jouer</span></button>'+
    '<h2>Jeux rapides</h2><div class="card" style="margin-bottom:12px"><p style="margin:0">'+src+'</p></div><div class="stack">'+GAMES.map(function(g,i){
     var b=S.games[g.id];
     return '<button class="mod" data-game="'+g.id+'"><span class="num">'+(i+1)+'</span><span><b>'+g.n+'</b><span class="sub">'+g.s+'</span>'+(b!==undefined?'<span style="display:block;margin-top:8px"><span class="pill good">Record : '+g.best(b)+'</span></span>':'')+'</span></button>';}).join("")+'</div>';
@@ -504,12 +506,7 @@ function renderLoop(){
   var G=overlay.G;
   if(G.status==="won")return renderLoopWin(G);
   if(G.status==="lost")return renderLoopLose(G);
-  if(loopGame&&loopGame.__G===G&&document.getElementById("lpwrap"))return;
-  stopRaf();
-  view.innerHTML='';
-  if(!window.Phaser||!window.CongressLoopPhaser){view.innerHTML='<div class="card">Le moteur de jeu n’a pas pu se charger. Vérifie que phaser.min.js est bien dans le dépôt.</div>';return;}
-  var st=document.createElement("div");st.id="loopstage";st.className="loopstage";st.innerHTML='<div id="lpwrap"></div>';document.body.appendChild(st);
-  loopGame=window.CongressLoopPhaser.mount(document.getElementById("lpwrap"),G,loopApi);loopGame.__G=G;
+  mountStage(G,window.CongressLoopPhaser,loopApi);
 }
 function starsHTML(n,big){var s="";for(var k=1;k<=3;k++)s+='<span class="st'+(k<=n?" on":"")+(big?" big":"")+'" style="animation-delay:'+(k*.15)+'s">★</span>';return s;}
 function recapList(G){
@@ -562,24 +559,106 @@ function renderLoopMap(){
    '<h2>Comment jouer</h2><div class="card"><p>Chaque client attend sa commande en français au-dessus de sa marmite. Touche sur le tapis le mot anglais qui correspond pour la servir.</p><p>La <b>jauge de patience</b> autour du client se vide : s’il part, tu perds un ❤️. Trois cœurs perdus, c’est perdu.</p><p>Un mot touché sans marmite correspondante part sur le <b>plateau d’attente</b>. Plateau plein : perdu aussi. Les <b>intrus</b> ne correspondent à aucune commande.</p><p style="margin:0">Enchaîne pour les <b>combos</b>, déclenche la <b>FEVER</b> à ×5 (points doublés), attrape les <b>mots dorés ★</b> (+5 pièces) et sers vite pour le bonus <b>FAST!</b>. Le tapis accélère au fil de la partie et des niveaux.</p></div>';
 }
 
+/* ===================== INBOX RACE (Teams / WhatsApp) ===================== */
+if(!S.inbox||typeof S.inbox!=="object")S.inbox={};
+if(!S.inbox.lv)S.inbox.lv={};
+var INBOX_N=20,inboxMap=false,inboxWeek=null;
+var DAYS=["Lundi","Mardi","Mercredi","Jeudi","Vendredi"];
+function ibStars(i){return S.inbox.lv[i]||0;}
+function ibUnlocked(i){return i===1||ibStars(i-1)>0;}
+function ibCurrent(){for(var i=1;i<=INBOX_N;i++)if(!ibStars(i))return i;return INBOX_N;}
+function ibTotal(){var t=0;for(var k in S.inbox.lv)t+=S.inbox.lv[k];return t;}
+function ibDay(i){return "Semaine "+Math.ceil(i/5)+" · "+DAYS[(i-1)%5];}
+function ibCfg(i){
+  var lvls=i<=5?[1,1,1]:i<=10?[1,2,2]:i<=15?[2,2,3]:[2,3,3];
+  return {n:8+Math.floor(i/2),start:Math.max(3200,8000-i*230),min:Math.max(1800,4200-i*120),acc:.95,lvls:lvls};
+}
+function startInbox(i){
+  stopRaf();
+  var c=ibCfg(i),all=window.INBOX||[],used={},msgs=[];
+  for(var k=0;k<c.n;k++){
+    var want=c.lvls[k%c.lvls.length],pool=all.filter(function(m,idx){return m[7]===want&&!used[idx];});
+    if(!pool.length)pool=all.filter(function(m,idx){return !used[idx];});
+    var m=pick(pool);used[all.indexOf(m)]=1;msgs.push(m);
+  }
+  overlay={type:"inbox",G:{i:i,c:c,msgs:msgs,spawned:0,answered:0,mistakes:0,missed:[],combo:0,maxCombo:0,score:0,status:"play",reason:""}};
+}
+var inboxApi={
+  speak:function(t){if(!S.loop.mute)speak(t,1);},
+  muted:function(){return !!S.loop.mute;},
+  dayName:ibDay,
+  win:function(G){
+    G.status="won";var stars=G.mistakes===0?3:G.mistakes<=2?2:1,prev=ibStars(G.i);
+    G.stars=stars;G.newBest=stars>prev;if(stars>prev)S.inbox.lv[G.i]=stars;
+    G.coins=10+stars*10+G.maxCombo*2;S.loop.coins+=G.coins;markToday();save();return {stars:stars,coins:G.coins};
+  },
+  lose:function(G,reason){G.status="lost";G.reason=reason;markToday();save();},
+  showResult:function(){stopRaf();render();window.scrollTo(0,0);},
+  quit:function(){stopRaf();overlay=null;tab="games";inboxMap=true;render();window.scrollTo(0,0);}
+};
+function mountStage(G,factory,api){
+  if(loopGame&&loopGame.__G===G&&document.getElementById("lpwrap"))return;
+  stopRaf();view.innerHTML='';
+  if(!window.Phaser||!factory){view.innerHTML='<div class="card">Le moteur de jeu n’a pas pu se charger.</div>';return;}
+  var st=document.createElement("div");st.id="loopstage";st.className="loopstage";st.innerHTML='<div id="lpwrap"></div>';document.body.appendChild(st);
+  loopGame=factory.mount(document.getElementById("lpwrap"),G,api);loopGame.__G=G;
+}
+function renderInbox(){
+  var G=overlay.G;
+  if(G.status==="won")return renderInboxEnd(G,true);
+  if(G.status==="lost")return renderInboxEnd(G,false);
+  mountStage(G,window.InboxRacePhaser,inboxApi);
+}
+function ibRecap(G){
+  var miss=G.missed,list=G.msgs.slice(0,Math.max(G.answered,1)+ (G.status==="lost"?2:0));
+  return '<div class="stack list">'+G.msgs.filter(function(m,k){return k<G.spawned;}).map(function(m){var bad=miss.indexOf(m)>-1;
+    return '<button class="les" data-say="'+esc(m[2])+'"><span class="ico">'+SVG.sound+'</span><span><b>'+esc(m[2])+'</b><span class="fr">'+esc(m[3])+'</span><span class="ex">↳ '+esc(m[4])+'</span></span>'+(bad?'<span class="pill warn">À revoir</span>':'<span></span>')+'</button>';}).join("")+'</div>';
+}
+function renderInboxEnd(G,won){
+  var nx=G.i<INBOX_N?G.i+1:null;
+  view.innerHTML='<div class="gamebar"><button class="back" data-inboxmap="1">‹ Carte</button><span class="tag">Inbox Race · '+ibDay(G.i)+'</span></div>'+
+   (won?'<div class="tile navy span2 lwin ibwin"><div class="tag">'+(G.newBest?"Journée bouclée · nouveau record":"Journée bouclée")+'</div><div class="stars">'+starsHTML(G.stars,true)+'</div>'+
+     '<div class="lstats"><div><b>'+G.score+'</b><span>points</span></div><div><b>×'+G.maxCombo+'</b><span>meilleur combo</span></div><div><b>+'+G.coins+'</b><span>pièces</span></div></div>'+
+     '<p>'+(G.stars===3?"Inbox zero sans faute !":G.mistakes+" mauvaise"+(G.mistakes>1?"s":"")+" réponse"+(G.mistakes>1?"s":"")+". Rejoue sans faute pour 3 étoiles.")+'</p></div>'+
+     '<div class="actions">'+(nx?'<button class="btn primary" data-inboxplay="'+nx+'">Journée suivante</button>':'<div class="card center"><b>Les 4 semaines sont bouclées, bravo !</b></div>')+'<button class="btn" data-inboxplay="'+G.i+'">Rejouer</button></div>'
+   :'<div class="card score"><div class="tag">Inbox débordée !</div><div class="big"><b>'+G.answered+'</b><small>/ '+G.msgs.length+' messages</small></div><p style="margin:8px 0 0">Astuce : réponds vite au message surligné. Une mauvaise réponse fait arriver le message suivant tout de suite.</p></div>'+
+     '<div class="actions"><button class="btn primary" data-inboxplay="'+G.i+'">Réessayer</button><button class="btn" data-inboxmap="1">Retour à la carte</button></div>')+
+   '<h2>Les messages de la journée</h2>'+ibRecap(G);
+}
+function renderInboxMap(){
+  var cur=ibCurrent();if(!inboxWeek)inboxWeek=Math.ceil(cur/5);
+  var wk=inboxWeek,nodes="";
+  for(var d=0;d<5;d++){var i=(wk-1)*5+d+1,st=ibStars(i),un=ibUnlocked(i),isCur=i===cur&&!st;
+    nodes+='<button class="node'+(st?" won":"")+(isCur?" cur":"")+(un?"":" locked")+'" '+(un?'data-inboxplay="'+i+'"':'disabled')+'><span class="nd ibnd">'+(un?DAYS[d].slice(0,3):'<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>')+'</span><span class="ns">'+starsHTML(st)+'</span></button>';}
+  view.innerHTML='<div class="gamebar"><button class="back" data-inboxback="1">‹ Jeux</button><button class="mutebtn" data-loopmute="1" aria-label="Son">'+(S.loop.mute?BSVG.mute:BSVG.sound)+'</button></div>'+
+   '<div class="qtext" style="margin-top:0">Inbox Race</div>'+
+   '<div class="bento"><div class="tile navy span2 ibtile"><div class="tag">Messages Teams et WhatsApp</div>'+
+    '<div class="lstats"><div><b>'+ibTotal()+'</b><span>étoiles / 60</span></div><div><b>'+S.loop.coins+'</b><span>pièces</span></div><div><b>'+DAYS[(cur-1)%5].slice(0,3)+'.</b><span>semaine '+Math.ceil(cur/5)+'</span></div></div>'+
+    '<button class="btn primary" data-inboxplay="'+cur+'">'+SVG.play+' Jouer : '+ibDay(cur)+'</button></div></div>'+
+   '<div class="chips" style="margin-top:16px">'+[1,2,3,4].map(function(w){var open=ibUnlocked((w-1)*5+1);return '<button class="chip'+(wk===w?" on":"")+'" data-inboxweek="'+w+'"'+(open?"":" disabled")+'>'+(open?"":"🔒 ")+'Semaine '+w+'</button>';}).join("")+'</div>'+
+   '<div class="ibpath">'+nodes+'</div>'+
+   '<h2>Comment jouer</h2><div class="card"><p>Les messages de tes collègues, de l’agence, des sponsors ou des hôtesses arrivent sur Teams et WhatsApp, de plus en plus vite.</p><p>Réponds au message surligné en choisissant la bonne réponse anglaise. Une mauvaise réponse fait arriver le message suivant aussitôt.</p><p style="margin:0">Si le fil déborde, la journée est perdue. Vide-le pour un bonus <b>Inbox zero</b>, enchaîne pour les combos, et réponds en moins de 3 secondes pour le bonus <b>FAST!</b></p></div>';
+}
+
 /* ===================== RENDU ===================== */
 var view=$("#view"),prevKey=null;
 function render(){
   var inov=!!overlay;
   document.body.classList.toggle("inquiz",inov);
-  $("#hdr").style.display=(inov||(tab==="lessons"&&route.lesson)||(tab==="games"&&loopMap))?"none":"";
+  $("#hdr").style.display=(inov||(tab==="lessons"&&route.lesson)||(tab==="games"&&(loopMap||inboxMap)))?"none":"";
   renderTabs();$("#htitle").textContent=TITLES[tab];
   if(overlay){
     if(overlay.type==="quiz")renderQuiz();
     else if(overlay.type==="loop")renderLoop();
+    else if(overlay.type==="inbox")renderInbox();
     else{var g=overlay.g;({memory:renderMemory,chrono:renderChrono,scramble:renderScramble,dictee:renderDictee})[g.id](g);}
   }
   else if(tab==="home")renderHome();
   else if(tab==="lessons")renderLessons();
   else if(tab==="review")renderReview();
-  else if(tab==="games")(loopMap?renderLoopMap():renderGames());
+  else if(tab==="games")(loopMap?renderLoopMap():inboxMap?renderInboxMap():renderGames());
   else renderOral();
-  var key=overlay?(overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"");
+  var key=overlay?(overlay.type==="inbox"?"I"+overlay.G.i+overlay.G.status:overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"")+(inboxMap?"ib"+inboxWeek:"");
   if(key!==prevKey){view.classList.remove("v-fade","v-up");void view.offsetWidth;view.classList.add(overlay?"v-up":"v-fade");}
   prevKey=key;
 }
@@ -596,7 +675,7 @@ document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay
 document.addEventListener("click",function(e){
   var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
   if(el.form&&el.type==="submit")return;
-  if(d.tab)return go(function(){stopTimer();stopRaf();overlay=null;loopMap=false;tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
+  if(d.tab)return go(function(){stopTimer();stopRaf();overlay=null;loopMap=false;inboxMap=false;tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
   if(d.say!==undefined){speak(d.say);return;}
   if(d.open!==undefined){if(!d.open)return;return go(function(){overlay=null;tab="lessons";route.lesson=+d.open;quarterSel=BYW[+d.open].q;});}
   if(d.back)return go(function(){route.lesson=null;});
@@ -608,9 +687,13 @@ document.addEventListener("click",function(e){
     var z=overlay.q;if(z.locked)return;var q=z.qs[z.pos],i=+d.opt;z.locked=true;z.picked=i;z.res.push(i===q.a);speak(q.say);render();return;}
   if(d.qnext){var zq=overlay.q;if(zq.pos<zq.qs.length-1)return go(function(){zq.pos++;zq.locked=false;zq.picked=null;});return go(finishQuiz);}
   if(d.again)return go(function(){var z=overlay.q;overlay={type:"quiz",q:z.kind==="lesson"?lessonQuiz(z.w):reviewQuiz()};});
-  if(d.quit)return go(function(){stopTimer();var wasLoop=overlay&&overlay.type==="loop";stopRaf();overlay=null;if(wasLoop){tab="games";loopMap=true;}});
+  if(d.quit)return go(function(){stopTimer();var t0=overlay&&overlay.type;stopRaf();overlay=null;if(t0==="loop"){tab="games";loopMap=true;}if(t0==="inbox"){tab="games";inboxMap=true;}});
+  if(d.inboxmap)return go(function(){stopRaf();overlay=null;tab="games";loopMap=false;inboxMap=true;});
+  if(d.inboxback)return go(function(){inboxMap=false;});
+  if(d.inboxweek)return go(function(){inboxWeek=+d.inboxweek;});
+  if(d.inboxplay)return go(function(){tab="games";loopMap=false;inboxMap=true;inboxWeek=Math.ceil(+d.inboxplay/5);startInbox(+d.inboxplay);});
   /* congress loop */
-  if(d.loopmap)return go(function(){stopRaf();overlay=null;tab="games";loopMap=true;});
+  if(d.loopmap)return go(function(){stopRaf();overlay=null;tab="games";inboxMap=false;loopMap=true;});
   if(d.loopback)return go(function(){loopMap=false;});
   if(d.loopworld)return go(function(){loopWorld=+d.loopworld;});
   if(d.loopplay){var pr=d.loopplay.split("-");return go(function(){tab="games";loopMap=true;loopWorld=+pr[0];startLoop(+pr[0],+pr[1]);});}

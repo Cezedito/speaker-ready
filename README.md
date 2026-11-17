@@ -12,6 +12,7 @@ Webapp pour progresser en anglais dans la communication des congrès médicaux :
 - Chaque leçon : 6 mots avec exemple, un point de grammaire, 4 phrases utiles, une astuce métier et un quiz de 6 questions (4/6 pour valider).
 - **Révision** : cartes mémoire et quiz de 10 questions sur les leçons faites.
 - **Congress Loop**, jeu à niveaux (moteur Phaser 4) : des mots anglais tournent sur un tapis en boucle, il faut servir les commandes en français des marmites avant que le plateau d'attente déborde. 90 niveaux en 6 mondes (un par trimestre, plus les mondes Marketing et Bureau débloqués d'office), étoiles, combos, pièces et bonus (Indice, Gel, Case), niveaux à l'écoute et niveaux inversés.
+- **Inbox Race**, jeu à niveaux (Phaser) : des messages Teams et WhatsApp arrivent de plus en plus vite, il faut choisir la bonne réponse anglaise avant que le fil déborde. 20 journées sur 4 semaines, 72 conversations, combos, bonus FAST! et Inbox zero.
 - **4 jeux rapides** : Paires, Vrai ou faux chrono, Phrase en désordre, Dictée.
 - **Oral** : écoute et répétition au micro avec score mot par mot (Chrome / Safari).
 - Progression enregistrée dans le navigateur (leçons, mots maîtrisés, records, série de jours).
@@ -22,6 +23,7 @@ Webapp pour progresser en anglais dans la communication des congrès médicaux :
 | `index.html` | Page et design |
 | `manifest.webmanifest`, `icon-*.png`, `apple-touch-icon.png`, `favicon-32.png` | Nom, icône et installation sur l'écran d'accueil |
 | `phaser.min.js` | Moteur de jeu Phaser 4.2.1 (licence MIT), utilisé par Congress Loop |
+| `inbox-phaser.js`, `inbox-data.js` | Jeu Inbox Race et ses conversations (format décrit en tête de fichier) |
 | `loop-phaser.js` | Scène de jeu de Congress Loop (tapis, marmites, combos, effets, sons) |
 | `app.js` | Fonctionnement de l'appli |
 | `lessons-q1.js` … `lessons-q4.js` | Contenu des leçons, un fichier par trimestre |

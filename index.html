@@ -367,6 +367,16 @@ nav.tabs .in{position:relative;display:grid;grid-template-columns:repeat(5,1fr)}
 .loopstage{position:fixed;inset:0;z-index:60;background:#FFF3E2;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
 #lpwrap{position:absolute;top:env(safe-area-inset-top);bottom:env(safe-area-inset-bottom);left:50%;width:min(100%,480px);transform:translateX(-50%)}
 #lpwrap canvas{display:block}
+
+.ibcard{background:linear-gradient(140deg,#5B5FC7 0%,#3E41A8 55%,#128C7E 100%)!important;margin-top:14px}
+.ibcard::after{background:radial-gradient(circle,rgba(37,211,102,.45),transparent 70%)!important}
+.ibtile{background:linear-gradient(140deg,#5B5FC7 0%,#3E41A8 55%,#128C7E 100%)!important}
+.ibwin{background:linear-gradient(140deg,#5B5FC7 0%,#3E41A8 100%)!important;margin-top:8px}
+.ibico{font-size:22px}
+.ibpath{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:18px 0 10px}
+.ibpath .nd{width:58px;height:58px;font-size:14px}
+.ibpath .node.won .nd{background:#5B5FC7}
+.ibpath .st{font-size:11px}
 </style>
 </head>
 <body>
@@ -383,6 +393,8 @@ nav.tabs .in{position:relative;display:grid;grid-template-columns:repeat(5,1fr)}
 <script src="lessons-quotidien.js"></script>
 <script src="phaser.min.js"></script>
 <script src="loop-phaser.js"></script>
+<script src="inbox-data.js"></script>
+<script src="inbox-phaser.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
