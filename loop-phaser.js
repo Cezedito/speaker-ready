@@ -51,7 +51,7 @@ function buzz(p){try{if(navigator.vibrate)navigator.vibrate(p);}catch(e){}}
 /* ---------- la scène ---------- */
 class LoopScene extends Phaser.Scene{
   constructor(){super("loop");}
-  init(d){this.G=d.G;this.api=d.api;this.W=d.W;this.H=d.H;this.dpr=d.dpr;this.sfx=new Sfx(d.api);}
+  init(d){this.G=d.G;this.api=d.api;this.W=d.W;this.H=d.H;this.T=d.T||0;this.B=d.B||0;this.dpr=d.dpr;this.sfx=new Sfx(d.api);}
 
   txt(x,y,s,size,color,o){
     o=o||{};
@@ -63,7 +63,7 @@ class LoopScene extends Phaser.Scene{
 
   create(){
     var G=this.G,W=this.W,H=this.H,self=this;
-    this.cameras.main.setZoom(this.dpr);this.cameras.main.centerOn(W/2,H/2);
+    this.cameras.main.setZoom(this.dpr);this.cameras.main.centerOn(W/2,H/2+(this.B-this.T)/2);
     this.makeTextures();
     /* état restauré (reprise après défaite) */
     G.items.forEach(function(it){if(it.state==="belt")it.state="queue";});
@@ -93,7 +93,7 @@ class LoopScene extends Phaser.Scene{
 
   drawBackground(){
     var W=this.W,H=this.H,g=this.add.graphics();
-    g.fillGradientStyle(0xFFF3E2,0xFFF3E2,0xFFD9C4,0xFFC9B5,1);g.fillRect(0,0,W,H);
+    g.fillGradientStyle(0xFFF3E2,0xFFF3E2,0xFFD9C4,0xFFC9B5,1);g.fillRect(0,-this.T,W,H+this.T+this.B);
     g.fillStyle(0xffffff,.35);g.fillCircle(W*.85,H*.12,90);g.fillCircle(W*.1,H*.55,70);g.fillCircle(W*.8,H*.85,60);
     this.bgFx=g;
   }
@@ -540,7 +540,7 @@ class LoopScene extends Phaser.Scene{
   countdown(seq){
     var self=this,W=this.W,cy=this.path.cy,k=0;
     this.started=false;
-    var dim=this.add.rectangle(W/2,this.H/2,W,this.H,0x00205B,.25).setDepth(40);
+    var dim=this.add.rectangle(W/2,this.H/2+(this.B-this.T)/2,W,this.H+this.T+this.B,0x00205B,.25).setDepth(40);
     var next=function(){
       if(k>=seq.length){dim.destroy();self.started=true;self.G.begun=true;self.G.status="play";
         if(self.G.c.mode==="audio"){var o=self.G.pots.find(function(x){return x&&!x.done;});if(o)self.api.speak(o.word,.9);}
@@ -563,7 +563,7 @@ class LoopScene extends Phaser.Scene{
       var r=self.api.win(G);
       self.sfx.win();buzz([20,40,20,40,80]);
       var W=self.W,H=self.H;
-      var dim=self.add.rectangle(W/2,H/2,W,H,0x00205B,0).setDepth(50);self.tweens.add({targets:dim,fillAlpha:.55,duration:300});
+      var dim=self.add.rectangle(W/2,H/2+(self.B-self.T)/2,W,H+self.T+self.B,0x00205B,0).setDepth(50);self.tweens.add({targets:dim,fillAlpha:.55,duration:300});
       var conf=self.add.particles(0,0,"conf",{x:{min:0,max:W},y:-20,speedY:{min:160,max:320},speedX:{min:-70,max:70},rotate:{min:0,max:360},lifespan:2600,gravityY:140,quantity:3,frequency:40,tint:PAL.concat([C.terra,C.gold]),scale:{min:.6,max:1}}).setDepth(52);
       self.time.delayedCall(1800,function(){conf.emitting=false;});
       var pw=Math.min(330,W-40),ph=360,panel=self.add.container(W/2,-ph).setDepth(51);
@@ -598,7 +598,7 @@ class LoopScene extends Phaser.Scene{
     this.sfx.lose();buzz(220);this.cameras.main.shake(300,.012);
     var W=this.W,H=this.H;
     this.time.delayedCall(350,function(){
-      var dim=self.add.rectangle(W/2,H/2,W,H,0x3A0A12,0).setDepth(50);self.tweens.add({targets:dim,fillAlpha:.55,duration:300});
+      var dim=self.add.rectangle(W/2,H/2+(self.B-self.T)/2,W,H+self.T+self.B,0x3A0A12,0).setDepth(50);self.tweens.add({targets:dim,fillAlpha:.55,duration:300});
       var t=self.txt(W/2,H/2-40,reason==="tray"?"PLATEAU PLEIN !":reason==="hearts"?"PLUS DE VIES !":"TEMPS ÉCOULÉ !",34,"#ffffff",{display:true,stroke:"#D1364A",sw:10}).setDepth(51).setScale(0);
       self.tweens.add({targets:t,scale:1,duration:500,ease:"Bounce.Out"});
       var s=self.txt(W/2,H/2+6,G.served+" / "+G.orders.length+" commandes servies",16,"#ffffff").setDepth(51).setAlpha(0);
@@ -615,11 +615,14 @@ class LoopScene extends Phaser.Scene{
 /* ---------- montage ---------- */
 window.CongressLoopPhaser={
   mount:function(parent,G,api){
-    var r=parent.getBoundingClientRect(),W=Math.round(r.width),H=Math.round(r.height),dpr=Math.min(window.devicePixelRatio||1,3);
+    var r=parent.getBoundingClientRect(),W=Math.round(r.width),FH=Math.round(r.height),dpr=Math.min(window.devicePixelRatio||1,3);
+    var pr=document.createElement("div");pr.style.cssText="position:fixed;top:0;left:0;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)";document.body.appendChild(pr);
+    var cs=getComputedStyle(pr),T=Math.round(parseFloat(cs.paddingTop)||0),B=Math.round(parseFloat(cs.paddingBottom)||0);pr.remove();
+    var H=FH-T-B;
     var game=new Phaser.Game({type:Phaser.AUTO,parent:parent,backgroundColor:"#FFF3E2",banner:false,
-      scale:{mode:Phaser.Scale.NONE,width:Math.round(W*dpr),height:Math.round(H*dpr),zoom:1/dpr},
+      scale:{mode:Phaser.Scale.NONE,width:Math.round(W*dpr),height:Math.round(FH*dpr),zoom:1/dpr},
       audio:{noAudio:true},input:{activePointers:2},render:{antialias:true}});
-    game.scene.add("loop",LoopScene,true,{G:G,api:api,W:W,H:H,dpr:dpr});
+    game.scene.add("loop",LoopScene,true,{G:G,api:api,W:W,H:H,T:T,B:B,dpr:dpr});
     window.__loopGame=game;
     return game;
   }
