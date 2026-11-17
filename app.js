@@ -26,6 +26,19 @@ LESSONS.forEach(function(l){
   l.v.forEach(function(v,i){WORDS.push({id:l.w+"-"+i,en:v[0],fr:v[1],ex:v[2],w:l.w});});
   l.p.forEach(function(p){PHRASES.push({en:p[0],fr:p[1],w:l.w});});
 });
+/* lexique thématique */
+var BANK=[],seenEn={};WORDS.forEach(function(x){seenEn[x.en.toLowerCase()]=x;});
+(window.VOCAB_BANK||[]).forEach(function(t,ti){
+  var th={id:t.id,n:t.n,ic:t.ic,i:ti,words:[]};
+  t.w.split("\n").forEach(function(line,i){
+    var f=line.split("|");if(f.length<3)return;var en=f[0].trim(),ex0=seenEn[en.toLowerCase()];if(ex0){if(th.words.indexOf(ex0)<0)th.words.push(ex0);return;}
+    var o={id:"b"+t.id+"-"+i,en:en,fr:f[1].trim(),ex:f.slice(2).join("|").trim(),w:1000+ti};seenEn[en.toLowerCase()]=o;th.words.push(o);WORDS.push(o);
+  });
+  BANK.push(th);
+});
+function wlabel(w){if(w.w>=1000){var t=BANK[w.w-1000];return t.ic+" "+t.n;}var l=BYW[w.w];return l?"Leçon "+lnum(l):"";}
+function bankKnown(t){return t.words.filter(function(x){return S.known[x.id];}).length;}
+function bankSeen(t){return t.words.filter(function(x){return S.srs[x.id];}).length;}
 var QNAMES={1:"Les bases pro",2:"Partenaires et logistique",3:"Presse et médical",4:"Aisance et nuances",5:"Marketing",6:"Anglais du quotidien au bureau"};
 var QSHORT={1:"Trimestre 1",2:"Trimestre 2",3:"Trimestre 3",4:"Trimestre 4",5:"Marketing",6:"Au quotidien"};
 var MAIN=LESSONS.filter(function(l){return l.q<=4;});
@@ -57,7 +70,7 @@ var SVG={
 
 /* ===================== ÉTAT ===================== */
 var KEY="congress-english:v3";
-var S={known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{},calls:{},profile:{name:NAME}};
+var S={decks:[],known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{},calls:{},profile:{name:NAME}};
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in S){if(o[k]!==undefined)S[k]=o[k];}}}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 save();
@@ -109,26 +122,30 @@ var GAMES=[
  {id:"dictee",n:"Dictée",s:"Écoute un mot et écris-le",best:function(v){return v+" / 8";}}
 ];
 function gameOfDay(){var d=new Date(),start=new Date(d.getFullYear(),0,0);return GAMES[Math.floor((d-start)/864e5)%GAMES.length];}
+var settingsOpen=false;
 function renderHome(){
-  var dc=doneCount(),pct=Math.round(dc/52*100),wk=programWeek(),nx=nextLesson(),kc=knownCount(),st=streak(),gd=gameOfDay();
-  var pace=dc>wk?"Tu es en avance sur le programme. Bravo !":dc===wk?"Leçon de la semaine faite, tu es à jour.":(dc===wk-1?"Tu es pile dans le rythme : une leçon cette semaine.":"Tu as "+(wk-1-dc)+" leçon"+(wk-1-dc>1?"s":"")+" de retard, rien de grave : avance à ton rythme.");
-  var cq=nx?nx.q:4;
+  if(settingsOpen)return renderSettings();
+  var dc=doneCount(),wk=programWeek(),nx=nextLesson(),kc=knownCount(),st=streak();
   view.innerHTML=
    '<div class="bento">'+sessTile()+
-    '<div class="tile navy span2"><div class="tag">Programme annuel · semaine '+wk+' / 52</div>'+
-      '<div class="hero-num"><b id="cnt" data-to="'+dc+'">'+dc+'</b><small>/ 52 leçons</small></div>'+
-      '<div><div class="meter"><i style="width:'+pct+'%"></i></div><div class="meter-legend"><span>Semaine 1</span><span>Semaine 52</span></div></div>'+
-      '<p>'+pace+'</p></div>'+
-    (nx?'<button class="tile cont span2" data-open="'+nx.w+'"><span class="ico cta">'+SVG.play+'</span><span class="txt"><span class="tag">Leçon '+nx.w+' · '+nx.lv+'</span><b>'+esc(nx.t)+'</b></span><span class="chev" aria-hidden="true"></span></button>'
-       :'<div class="tile span2"><b>Programme terminé !</b><span class="tag">Continue avec les jeux et la révision pour garder le niveau.</span></div>')+
-    '<div class="tile"><span class="ico">'+SVG.fire+'</span><div class="kpi">'+st+'<small>jour'+(st>1?"s":"")+'</small></div><div class="tag">Série en cours</div></div>'+
-    '<div class="tile"><span class="ico">'+SVG.review+'</span><div class="kpi">'+kc+'<small>/ '+WORDS.length+'</small></div><div class="tag">Mots maîtrisés</div></div>'+
-    '<button class="tile cont span2" data-loopmap="1"><span class="ico">'+SVG.dice+'</span><span class="txt"><span class="tag">Congress Loop · '+totalStars()+' ★</span><b>Continuer : monde '+currentLevel().w+', niveau '+currentLevel().i+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
-    '<button class="tile cont span2" data-inboxmap="1"><span class="ico ibico">💬</span><span class="txt"><span class="tag">Inbox Race · '+ibTotal()+' ★</span><b>Continuer : '+ibDay(ibCurrent())+'</b></span><span class="chev" aria-hidden="true"></span></button>'+
+    '<div class="tile span2 hstats">'+
+      '<div><b id="cnt" data-to="'+dc+'">'+dc+'</b><span>/ 52 leçons</span></div>'+
+      '<div><b>'+st+'</b><span>jour'+(st>1?"s":"")+' de suite</span></div>'+
+      '<div><b>'+kc+'</b><span>mots acquis</span></div>'+
+      '<div class="hmeter"><i style="width:'+Math.round(dc/52*100)+'%"></i></div>'+
+    '</div>'+
+    (nx?'<button class="tile cont span2" data-open="'+nx.w+'"><span class="ico cta">'+SVG.play+'</span><span class="txt"><span class="tag">Leçon '+nx.w+' · semaine '+wk+'</span><b>'+esc(nx.t)+'</b></span><span class="chev" aria-hidden="true"></span></button>':'')+
    '</div>'+
-   '<h2>Parcours thématiques</h2><div class="stack">'+[5,6].map(function(q){var t=track(q),dn=t.filter(function(l){return valid(l.w);}).length,nx2=t.filter(function(l){return !valid(l.w);})[0];return '<button class="mod" data-quarter-open="'+q+'"><span class="num" style="font-size:13px">'+(q===5?'Mkt':'Bureau')+'</span><span><b>'+QNAMES[q]+'</b><span class="sub">'+(nx2?'Prochaine : '+esc(nx2.t):'Parcours terminé !')+'</span><span class="prog" style="display:block;margin-top:10px"><i style="width:'+Math.round(dn/t.length*100)+'%"></i></span><span class="sub" style="display:block;margin-top:6px;font-size:13px">'+dn+' / '+t.length+' leçons</span></span></button>';}).join('')+'</div>'+
-   '<h2>Trimestre '+cq+' · '+QNAMES[cq]+'</h2>'+lessonList(cq)+backupHTML();
+   '<h2>Jouer</h2><div class="qgrid">'+
+    '<button class="qtile q1" data-loopmap="1"><span class="qe">🍲</span><b>Congress Loop</b><span>Niveau '+currentLevel().w+'-'+currentLevel().i+'</span></button>'+
+    '<button class="qtile q2" data-inboxmap="1"><span class="qe">💬</span><b>Inbox Race</b><span>'+ibTotal()+' ★</span></button>'+
+    '<button class="qtile q3" data-callsmap="1"><span class="qe">📞</span><b>Le Coup de fil</b><span>'+callStars()+' / 30 ★</span></button>'+
+    '<button class="qtile q4" data-tab="oral"><span class="qe">🎙️</span><b>Oral</b><span>'+oralToday()+' / '+ORAL_GOAL+' aujourd’hui</span></button>'+
+   '</div>';
   countUp();
+}
+function renderSettings(){
+  view.innerHTML='<button class="backlink" data-settings="0">‹ Accueil</button><h1 class="stitle">Réglages</h1>'+backupHTML();
 }
 function sessTile(){
   var p=sessPlan(),done=sessDoneToday(),parts=[];
@@ -241,18 +258,37 @@ function finishQuiz(){
 /* ===================== RÉVISION ===================== */
 var R={scope:"auto",onlyNew:false,deck:[],pos:0,flipped:false};
 function buildDeck(){
-  var base=R.scope==="all"?poolWords("all"):poolWords();
+  var th=R.scope.indexOf("t:")===0?BANK.filter(function(t){return t.id===R.scope.slice(2);})[0]:null;
+  var base=th?th.words.slice():R.scope==="all"?poolWords("all"):poolWords();
   R.deck=shuffle(base.filter(function(w){return !R.onlyNew||!S.known[w.id];}));R.pos=0;R.flipped=false;
 }
+function renderLexicon(){
+  var seg='<div class="seg2"><button data-rview="cards">Cartes</button><button class="on" data-rview="lex">Lexique</button></div>';
+  if(R.lexT===null||R.lexT===undefined){
+    var tot=BANK.reduce(function(a,t){return a+t.words.length;},0),kn=BANK.reduce(function(a,t){return a+bankKnown(t);},0);
+    view.innerHTML=seg+'<p class="lexintro"><b>'+tot+' mots et expressions</b> classés par thème, en plus des leçons. Les thèmes cochés alimentent ta session du jour (6 nouveaux mots quand la leçon est déjà vue). '+kn+' maîtrisés.</p>'+
+      '<div class="lexgrid">'+BANK.map(function(t){var k=bankKnown(t),n=t.words.length,on=deckOn(t.id);
+        return '<button class="lext" data-lext="'+t.i+'"><span class="le">'+t.ic+'</span><b>'+esc(t.n)+'</b><span class="ln">'+k+' / '+n+' maîtrisés</span><span class="lbar"><i style="width:'+Math.round(k/n*100)+'%"></i></span>'+(on&&S.decks&&S.decks.length?'<span class="lon">✓ session</span>':'')+'</button>';}).join("")+'</div>';
+    return;
+  }
+  var t=BANK[R.lexT],on=deckOn(t.id),k=bankKnown(t);
+  view.innerHTML='<button class="backlink" data-lext="-1">‹ Tous les thèmes</button><div class="lexhd"><span class="le">'+t.ic+'</span><div><h2 style="margin:0">'+esc(t.n)+'</h2><span class="tag">'+t.words.length+' mots · '+k+' maîtrisés · '+bankSeen(t)+' déjà vus</span></div></div>'+
+    '<div class="row2"><button class="btn primary" data-scope="t:'+t.id+'" data-rview="cards">Réviser en cartes</button><button class="btn'+(on&&S.decks&&S.decks.length?" on":"")+'" data-deck="'+t.id+'">'+(S.decks&&S.decks.indexOf(t.id)>-1?"✓ Dans ma session":"Ajouter à ma session")+'</button></div>'+
+    '<div class="lexlist">'+t.words.map(function(w){var kw=S.known[w.id];
+      return '<div class="lexw'+(kw?" kn":"")+'"><div class="lwt"><b>'+esc(w.en)+'</b><span>'+esc(w.fr)+'</span><i>'+esc(w.ex)+'</i></div><button class="lsay" data-say="'+esc(w.en+". "+w.ex)+'" aria-label="Écouter">'+SVG.sound+'</button></div>';}).join("")+'</div>';
+}
+function deckOn(id){return !S.decks||!S.decks.length||S.decks.indexOf(id)>-1;}
 function renderReview(){
+  if(R.view==="lex")return renderLexicon();
   var dc=doneCount();
-  var chips='<div class="chips"><button class="chip'+(R.scope==="auto"?" on":"")+'" data-scope="auto">'+(dc?"Mes leçons":"Premières leçons")+'</button><button class="chip'+(R.scope==="all"?" on":"")+'" data-scope="all">Tout le programme</button><button class="chip'+(R.onlyNew?" on":"")+'" data-onlynew="1">À revoir</button></div>';
+  var thR=R.scope.indexOf("t:")===0?BANK.filter(function(t){return t.id===R.scope.slice(2);})[0]:null;
+  var chips='<div class="seg2"><button class="on" data-rview="cards">Cartes</button><button data-rview="lex">Lexique</button></div><div class="chips">'+(thR?'<button class="chip on" data-scope="'+R.scope+'">'+thR.ic+' '+esc(thR.n)+'</button>':'')+'<button class="chip'+(R.scope==="auto"?" on":"")+'" data-scope="auto">'+(dc?"Mes leçons":"Premières leçons")+'</button><button class="chip'+(R.scope==="all"?" on":"")+'" data-scope="all">Tout le programme</button><button class="chip'+(R.onlyNew?" on":"")+'" data-onlynew="1">À revoir</button></div>';
   var quizBtn='<div class="actions"><button class="btn primary" data-rquiz="1">Quiz de révision · 10 questions</button>'+(S.best!==null?'<p class="tag center" style="margin:0">Meilleur score : '+S.best+' / 10</p>':'')+'</div>';
   if(!R.deck.length){view.innerHTML=chips+'<div class="card center" style="padding:40px 20px"><div class="qtext" style="margin-top:0">Bravo !</div><p class="muted">Tous les mots de cette sélection sont maîtrisés.</p></div>'+quizBtn;return;}
   var w=R.deck[R.pos%R.deck.length],known=S.known[w.id];
   var face=R.flipped
-    ?'<button class="flash navy flip" data-flip="1"><span class="lab">Leçon '+w.w+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
-    :'<button class="card flash" data-flip="1"><span class="pill '+(known?"good":"neutral")+'">'+(known?"Maîtrisé":"Leçon "+w.w)+'</span><span class="term">'+esc(w.en)+'</span><span class="hint">Touche pour voir la traduction</span></button>';
+    ?'<button class="flash navy flip" data-flip="1"><span class="lab">'+esc(wlabel(w))+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
+    :'<button class="card flash" data-flip="1"><span class="pill '+(known?"good":"neutral")+'">'+(known?"Maîtrisé":esc(wlabel(w)))+'</span><span class="term">'+esc(w.en)+'</span><span class="hint">Touche pour voir la traduction</span></button>';
   view.innerHTML=chips+face+
     '<div class="counter">Carte '+(R.pos%R.deck.length+1)+' / '+R.deck.length+'</div>'+
     '<div class="row3"><button class="btn" data-say="'+esc(w.en)+'" aria-label="Écouter">'+SVG.sound+'</button><button class="btn" data-mark="0">À revoir</button><button class="btn primary" data-mark="1">Je connais</button></div>'+quizBtn;
@@ -764,7 +800,12 @@ function sessDoneToday(){return S.sess&&S.sess.date===today()&&S.sess.done;}
 function sessPlan(){
   var due=srsDue().slice(0,12),nl=nextLesson(),nw=[];
   if(nl){var ws=WORDS.filter(function(x){return x.w===nl.w;});if(ws.some(function(x){return !S.srs[x.id];}))nw=ws;}
-  return {due:due,nl:nl,nw:nw};
+  var lexT=null;
+  if(!nw.length){
+    var dk=(S.decks&&S.decks.length)?S.decks:BANK.map(function(t){return t.id;});
+    for(var k=0;k<dk.length&&!lexT;k++){var t=BANK.filter(function(b){return b.id===dk[k];})[0];if(!t)continue;var fresh=t.words.filter(function(x){return !S.srs[x.id];});if(fresh.length){lexT=t;nw=fresh.slice(0,6);}}
+  }
+  return {due:due,nl:nl,nw:nw,lexT:lexT};
 }
 function startSession(){
   var p=sessPlan(),steps=[];
@@ -774,7 +815,7 @@ function startSession(){
   if(qpool.length<4)qpool=qpool.concat(shuffle(poolWords()).slice(0,6));
   steps.push("quiz");steps.push("game");
   var sw=shuffle(qpool).slice(0,5),qs=sw.map(function(w,i){return i%2?qFrEn(w,WORDS):qEnFr(w,WORDS);});
-  overlay={type:"session",s:{steps:steps,k:0,due:p.due,nw:p.nw,nl:p.nl,pos:0,flipped:false,ok:0,
+  overlay={type:"session",s:{steps:steps,k:0,due:p.due,nw:p.nw,nl:p.nl,lexT:p.lexT,pos:0,flipped:false,ok:0,
     quiz:{qs:qs,pos:0,res:[],locked:false,picked:null},learned:0}};
 }
 function sessStep(){var s=overlay.s;return s.steps[s.k];}
@@ -792,7 +833,7 @@ function renderSession(){
     var id=s.due[s.pos],w=BYID[id],box=(S.srs[id]||{}).b||0;
     view.innerHTML=sessHeader("Révision · "+(s.pos+1)+" / "+s.due.length)+
      '<p class="qhint">Ces mots reviennent aujourd’hui. Dis-toi la traduction, puis vérifie.</p>'+
-     (s.flipped?'<button class="flash navy flip" data-sflip="1"><span class="lab">Leçon '+lnum(BYW[w.w])+' · boîte '+box+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
+     (s.flipped?'<button class="flash navy flip" data-sflip="1"><span class="lab">'+esc(wlabel(w))+' · boîte '+box+'</span><span class="term">'+esc(w.fr)+'</span><span class="en">'+esc(w.en)+'</span><span class="ex">« '+esc(w.ex)+' »</span></button>'
        :'<button class="card flash" data-sflip="1"><span class="pill neutral">Boîte '+box+' / 5</span><span class="term">'+esc(w.en)+'</span><span class="hint">Touche pour voir la traduction</span></button>')+
      (s.flipped?'<div class="row2" style="margin-top:14px"><button class="btn" data-sgrade="0">Je ne savais pas</button><button class="btn primary" data-sgrade="1">Je savais ✓</button></div>'
        :'<div class="actions"><button class="btn" data-say="'+esc(w.en)+'">'+SVG.sound+' Écouter</button><button class="btn primary" data-sflip="1">Voir la réponse</button></div>');
@@ -802,9 +843,9 @@ function renderSession(){
   if(st==="learn"){
     var w2=s.nw[s.pos];
     view.innerHTML=sessHeader("Nouveaux mots · "+(s.pos+1)+" / "+s.nw.length)+
-     '<p class="qhint">Leçon '+lnum(s.nl)+' : '+esc(s.nl.t)+'</p>'+
+     '<p class="qhint">'+(s.lexT?'Lexique · '+s.lexT.ic+' '+esc(s.lexT.n):'Leçon '+lnum(s.nl)+' : '+esc(s.nl.t))+'</p>'+
      '<div class="card flash learn"><span class="term">'+esc(w2.en)+'</span><span class="fr2">'+esc(w2.fr)+'</span><span class="ex2">« '+esc(w2.ex)+' »</span></div>'+
-     '<div class="row2" style="margin-top:14px"><button class="btn" data-say="'+esc(w2.ex)+'">'+SVG.sound+' La phrase</button><button class="btn primary" data-slearn="1">'+(s.pos<s.nw.length-1?"Mot suivant":"J’ai vu les 6 mots")+'</button></div>';
+     '<div class="row2" style="margin-top:14px"><button class="btn" data-say="'+esc(w2.ex)+'">'+SVG.sound+' La phrase</button><button class="btn primary" data-slearn="1">'+(s.pos<s.nw.length-1?"Mot suivant":"J’ai vu les "+s.nw.length+" mots")+'</button></div>';
     speak(w2.en);
     return;
   }
@@ -865,7 +906,7 @@ function callNext(){var L=callList();for(var k=0;k<L.length;k++)if(!S.calls[L[k]
 function callStars(){var t=0;for(var k in S.calls)t+=S.calls[k];return t;}
 function satFace(v){return v>=75?"😀":v>=55?"🙂":v>=35?"😐":"😠";}
 function callRoot(){var el=document.getElementById("callroot");if(!el){el=document.createElement("div");el.id="callroot";document.body.appendChild(el);}return el;}
-function callClose(){clearInterval(callTimer);clearInterval(ringTimer);callTimer=ringTimer=null;if(window.speechSynthesis)speechSynthesis.cancel();var el=document.getElementById("callroot");if(el)el.remove();}
+function callClose(){clearInterval(window.__durT);window.__durT=null;clearInterval(callTimer);clearInterval(ringTimer);callTimer=ringTimer=null;if(window.speechSynthesis)speechSynthesis.cancel();var el=document.getElementById("callroot");if(el)el.remove();}
 function speakThen(text,cb,rate){
   var done=false,fin=function(){if(done)return;done=true;cb&&cb();};
   var est=900+text.split(/\s+/).length*330/(rate||.95);
@@ -945,20 +986,44 @@ function callFinish(hung){
   C.stars=stars;C.hung=hung;C.dur=Math.round((Date.now()-(C.start||Date.now()))/1000);
   var prev=S.calls[C.sc.id]||0;C.newBest=stars>prev;if(stars>prev)S.calls[C.sc.id]=stars;
   C.coins=stars?10+stars*10:0;S.loop.coins+=C.coins;markToday();save();
-  if(hung){C.phase="done";render();return;}
+  var toDone=function(){C.phase="ended";render();tone([480,360],.18,"sine",.06,.12);setTimeout(function(){if(overlay&&overlay.C===C){C.phase="done";render();}},1300);};
+  if(hung){toDone();return;}
   var e=C.sat>=75?C.sc.end.good:C.sat>=45?C.sc.end.ok:C.sc.end.bad;
-  C.endLine=e;callSay(e,function(){C.phase="done";tone([523,659,784],.12,"triangle",.1,.1);render();});
+  C.endLine=e;callSay(e,function(){toDone();});
   C.phase="end";
 }
-function satHTML(v){var col=v>=75?"#2F9E66":v>=55?"#8BC34A":v>=35?"#F2A33A":"#D1364A";return '<div class="csat" id="csat"><span>'+satFace(v)+'</span><div class="csatbar"><i style="width:'+v+'%;background:'+col+'"></i></div></div>';}
+function satHTML(v){return '<span class="csat" id="csat">'+satFace(v)+' '+v+'%</span>';}
 function fmtDur(s){var m=Math.floor(s/60),x=s%60;return m+":"+(x<10?"0":"")+x;}
+var IC={
+ spk:'<svg viewBox="0 0 24 24"><path d="M3.5 9.2h3.6L12 5v14l-4.9-4.2H3.5z" fill="currentColor"/><path d="M15.3 9a4.2 4.2 0 0 1 0 6M17.9 6.4a7.8 7.8 0 0 1 0 11.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+ cc:'<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.4 10.2a2.4 2.4 0 1 0 0 3.6M17 10.2a2.4 2.4 0 1 0 0 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+ mic:'<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+ micoff:'<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 3.5l16 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+ more:'<svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="18.5" cy="12" r="1.9" fill="currentColor"/></svg>',
+ end:'<svg viewBox="0 0 24 24"><path d="M2.2 13.6c5.6-4.6 14-4.6 19.6 0 .6.5.7 1.4.2 2l-1.6 1.9c-.4.5-1.2.6-1.8.3l-2.7-1.4c-.5-.3-.8-.8-.7-1.4l.2-1.6c-2.2-.8-4.6-.8-6.8 0l.2 1.6c.1.6-.2 1.1-.7 1.4l-2.7 1.4c-.6.3-1.3.2-1.8-.3L2 15.6c-.5-.6-.4-1.5.2-2z" fill="currentColor"/></svg>',
+ phone:'<svg viewBox="0 0 24 24"><path d="M6.6 3.3c.6-.5 1.5-.4 2 .2l2 2.7c.4.5.4 1.2 0 1.7l-1.3 1.6c1 2 2.6 3.7 4.6 4.7l1.6-1.3c.5-.4 1.2-.4 1.7 0l2.7 2c.6.5.7 1.4.2 2l-1.4 1.6c-.8.9-2 1.3-3.2 1C9.9 18.3 5.7 14.1 4.4 8.5c-.3-1.2.1-2.4 1-3.2z" fill="currentColor"/></svg>',
+ pad:'<svg viewBox="0 0 24 24">'+[6,12,18].map(function(y){return [6,12,18].map(function(x){return '<circle cx="'+x+'" cy="'+(y-1.5)+'" r="1.9" fill="currentColor"/>';}).join("");}).join("")+'<circle cx="12" cy="22" r="1.9" fill="currentColor"/></svg>',
+ alarm:'<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 9.5V13l2.3 1.6M4 5.5l3-2.5M20 5.5l-3-2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+ msg:'<svg viewBox="0 0 24 24"><path d="M12 4c5 0 9 3.2 9 7.2s-4 7.2-9 7.2c-1 0-2-.1-2.9-.4L4.6 20l1.2-3.6C4.1 15 3 13.2 3 11.2 3 7.2 7 4 12 4z" fill="currentColor"/></svg>'
+};
+function callDurTick(){var C=overlay&&overlay.type==="call"&&overlay.C;var el=document.getElementById("cdur");if(C&&el&&C.start&&C.phase!=="done"&&C.phase!=="ended")el.textContent=fmtDur(Math.round((Date.now()-C.start)/1000));}
+function cbtn(ic,lab,attr,on,extra){return '<button class="ib'+(on?" on":"")+(extra||"")+'" '+attr+'><span class="ibc">'+ic+'</span><span class="ibl">'+lab+'</span></button>';}
 function renderCall(){
   var C=overlay.C,sc=C.sc,root=callRoot();view.innerHTML="";
-  var head='<div class="ctop"><div class="cav" style="background:'+sc.col+'">'+sc.av+'</div><div class="cname">'+esc(sc.name)+'</div><div class="crole">'+esc(sc.role)+'</div></div>';
+  root.setAttribute("data-av",sc.av);root.style.setProperty("--cc",sc.col);
+  if(!window.__durT)window.__durT=setInterval(callDurTick,1000);
   if(C.phase==="ring"){
     root.className="callscr ring";
-    root.innerHTML='<div class="cinc">Appel entrant…</div>'+head+'<div class="cgoal"><b>'+esc(sc.title)+'</b><span>'+esc(sc.goal)+'</span></div>'+
-      '<div class="cbtns"><button class="cbtn red" data-quit="1">✕<span>Refuser</span></button><button class="cbtn green pulse" data-cacc="1">✆<span>Décrocher</span></button></div>';
+    root.innerHTML='<div class="ihead"><div class="isub">mobile</div><div class="iname">'+esc(sc.name)+'</div><div class="isub2">'+esc(sc.role)+'</div></div>'+
+      '<div class="iav">'+sc.av+'</div>'+
+      '<div class="igoal"><span>Objectif de l’appel</span><b>'+esc(sc.title)+'</b><i>'+esc(sc.goal)+'</i></div>'+
+      '<div class="iring"><div class="ismall"><button class="isb" data-quit="1"><span>'+IC.alarm+'</span>Me le rappeler</button><button class="isb" data-quit="1"><span>'+IC.msg+'</span>Message</button></div>'+
+      '<div class="ibig"><button class="ibtn red" data-quit="1"><span class="ibc">'+IC.end+'</span><span class="ibl">Refuser</span></button><button class="ibtn green" data-cacc="1"><span class="ibc wig">'+IC.phone+'</span><span class="ibl">Accepter</span></button></div></div>';
+    return;
+  }
+  if(C.phase==="ended"){
+    root.className="callscr ended";
+    root.innerHTML='<div class="ihead"><div class="iname">'+esc(sc.name)+'</div><div class="idur">Appel terminé</div></div><div class="iav">'+sc.av+'</div>';
     return;
   }
   if(C.phase==="done"){
@@ -980,21 +1045,33 @@ function renderCall(){
   }
   root.className="callscr live";
   var dur=C.start?fmtDur(Math.round((Date.now()-C.start)/1000)):"0:00";
-  var mid="";
-  if(C.phase==="talk"||C.phase==="end"){
-    mid='<div class="cwave'+(C.speaking?" on":"")+'"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>'+
-      (C.line?'<div class="csub">'+(C.cc?'<b>'+esc(C.line[0])+'</b>':'<b class="hidden-cc">Sous-titres masqués</b>')+(C.cc?'<i>'+esc(C.line[1])+'</i>':'')+'</div>':'');
-  }else if(C.phase==="choose"){
-    var line=C.sc.turns[C.t].c;
-    mid='<div class="csub small">'+(C.cc?'<b>'+esc(line[0])+'</b>':'<b class="hidden-cc">Sous-titres masqués</b>')+'<button class="crep" data-say="'+esc(line[0])+'">↺ Réécouter</button></div>'+
-      '<div class="ctimer"><i id="ctbar" style="width:'+Math.max(0,C.left/C.tmax*100)+'%"></i></div>'+
-      '<div class="copts">'+C.opts.map(function(p,j){return '<button class="copt" data-cpick="'+j+'">'+esc(p.o[0])+'</button>';}).join("")+'</div>';
+  var line=C.phase==="choose"?C.sc.turns[C.t].c:C.line;
+  var cap="";
+  if(line){
+    cap='<div class="lcap"><div class="lch"><span class="lcdot'+(C.speaking?" on":"")+'"></span>Sous-titres en direct</div>'+
+      (C.cc?'<b>'+esc(line[0])+'</b>':'<b class="hidden-cc">Sous-titres masqués · écoute bien</b>')+
+      (C.fr?'<i>'+esc(line[1])+'</i>':'')+'</div>';
+  }else if(C.speaking||C.phase==="talk"){cap='<div class="lcap dim"><div class="lch"><span class="lcdot"></span>…</div></div>';}
+  var bottom="";
+  if(C.phase==="choose"){
+    bottom='<div class="sheet"><div class="sgrab"></div><div class="shd"><b>Ta réponse</b><span class="ctimer"><i id="ctbar" style="width:'+Math.max(0,C.left/C.tmax*100)+'%"></i></span></div>'+
+      '<div class="copts">'+C.opts.map(function(p,j){return '<button class="copt" data-cpick="'+j+'">'+esc(p.o[0])+(C.fr?'<i>'+esc(p.o[1])+'</i>':'')+'</button>';}).join("")+'</div>'+
+      '<div class="smini">'+cbtn(IC.spk,"Réécouter",'data-say="'+esc(line[0])+'"')+cbtn(IC.cc,"Sous-titres",'data-ccc="1"',C.cc)+cbtn(IC.pad,"Traduction",'data-cfr="1"',C.fr)+'</div></div>'+
+      '<div class="iend"><button class="ibtn red sm" data-chang="1"><span class="ibc">'+IC.end+'</span></button></div>';
   }else if(C.phase==="speak"){
-    mid='<div class="cspeak"><span class="tag">À toi de le dire !</span><b>'+esc(C.cur.o[0])+'</b><div class="micbtn on" style="margin:18px auto 8px">'+SVG.oral+'</div><span class="rectime"><i></i>enregistrement…</span></div>'+
-      '<div class="cact row"><button class="btn primary" data-cdone="1">J’ai fini</button><button class="btn" data-cskip="1">Passer</button></div>';
+    bottom='<div class="sheet speak"><div class="sgrab"></div><span class="stag">À toi de le dire !</span><b class="sphr">'+esc(C.cur.o[0])+'</b>'+
+      '<div class="smic"><span class="ibc">'+IC.mic+'</span></div><span class="rectime"><i></i>Je t’écoute…</span>'+
+      '<div class="cact row"><button class="btn primary" data-cdone="1">J’ai fini</button><button class="btn ghost" data-cskip="1">Passer</button></div></div>';
+  }else{
+    var muted=!!S.oral.callSkip;
+    bottom=(C.goalOpen?'<div class="igoal live"><span>Objectif</span><b>'+esc(sc.title)+'</b><i>'+esc(sc.goal)+'</i></div>':'')+
+      '<div class="igrid">'+
+      cbtn(IC.spk,"haut-parleur",line?'data-say="'+esc(line[0])+'"':'disabled')+cbtn(IC.cc,"sous-titres",'data-ccc="1"',C.cc)+cbtn(muted?IC.micoff:IC.mic,"silence",'data-cmute="1"',muted)+
+      cbtn(IC.more,"objectif",'data-cgoal="1"',C.goalOpen)+'<button class="ibtn red" data-chang="1"><span class="ibc">'+IC.end+'</span><span class="ibl">fin</span></button>'+cbtn(IC.pad,"traduction",'data-cfr="1"',C.fr)+
+      '</div>';
   }
-  root.innerHTML='<div class="cbar"><span>'+dur+'</span><button class="ccbtn'+(C.cc?" on":"")+'" data-ccc="1">CC</button></div>'+head+satHTML(C.sat)+'<div class="cmid">'+mid+'</div>'+
-    '<div class="cbtns bottom"><button class="cbtn red" data-chang="1">✆<span>Raccrocher</span></button></div>';
+  root.innerHTML='<div class="ihead"><div class="iname">'+esc(sc.name)+'</div><div class="idur"><span id="cdur">'+dur+'</span> · '+satHTML(C.sat)+'</div></div>'+
+    '<div class="imid">'+cap+'</div>'+bottom;
 }
 function renderCallsMap(){
   var L=callList(),nx=callNext(),groups=[1,2,3];
@@ -1012,7 +1089,7 @@ function render(){
   var inov=!!overlay;
   document.body.classList.toggle("inquiz",inov);
   $("#hdr").style.display=(inov||(tab==="lessons"&&route.lesson)||(tab==="games"&&(loopMap||inboxMap||callsMap)))?"none":"";
-  renderTabs();$("#htitle").textContent=tab==="home"?greet():TITLES[tab];
+  renderTabs();$("#htitle").textContent=tab==="home"?greet():TITLES[tab];$("#hset").style.display=(tab==="home"&&!settingsOpen&&!inov)?"":"none";if(tab==="home"&&settingsOpen)$("#hdr").style.display="none";
   if(overlay){
     if(overlay.type==="quiz")renderQuiz();
     else if(overlay.type==="session")renderSession();
@@ -1026,7 +1103,7 @@ function render(){
   else if(tab==="review")renderReview();
   else if(tab==="games")(loopMap?renderLoopMap():inboxMap?renderInboxMap():callsMap?renderCallsMap():renderGames());
   else renderOral();
-  var key=overlay?(overlay.type==="call"?"C"+overlay.C.k:overlay.type==="session"?"S"+overlay.s.k+"-"+overlay.s.pos+"-"+(overlay.s.quiz.pos):overlay.type==="inbox"?"I"+overlay.G.i+overlay.G.status:overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"")+(inboxMap?"ib"+inboxWeek:"")+(callsMap?"calls":"");
+  var key=overlay?(overlay.type==="call"?"C"+overlay.C.k:overlay.type==="session"?"S"+overlay.s.k+"-"+overlay.s.pos+"-"+(overlay.s.quiz.pos):overlay.type==="inbox"?"I"+overlay.G.i+overlay.G.status:overlay.type==="loop"?"L"+overlay.G.w+"-"+overlay.G.i+overlay.G.status+(overlay.G.status==="play"?"":"x"):overlay.type==="quiz"?"q"+overlay.q.pos+(overlay.q.done?"d":""):"g"+overlay.g.id+(overlay.g.pos||0)+(overlay.g.done?"d":"")):tab+(route.lesson||"")+(loopMap?"map"+loopWorld:"")+(inboxMap?"ib"+inboxWeek:"")+(callsMap?"calls":"")+(settingsOpen?"set":"")+(tab==="review"?(R.view||"")+(R.lexT==null?"":R.lexT):"");
   if(key!==prevKey){view.classList.remove("v-fade","v-up");void view.offsetWidth;view.classList.add(overlay?"v-up":"v-fade");}
   prevKey=key;
 }
@@ -1044,7 +1121,8 @@ document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay
 document.addEventListener("click",function(e){
   var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
   if(el.form&&el.type==="submit")return;
-  if(d.tab)return go(function(){stopTimer();stopRaf();callClose();overlay=null;loopMap=false;inboxMap=false;callsMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
+  if(d.settings!==undefined)return go(function(){settingsOpen=d.settings==="1";});
+  if(d.tab)return go(function(){settingsOpen=false;stopTimer();stopRaf();callClose();overlay=null;loopMap=false;inboxMap=false;callsMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
   if(d.say!==undefined){speak(d.say);return;}
   if(d.open!==undefined){if(!d.open)return;return go(function(){overlay=null;tab="lessons";route.lesson=+d.open;quarterSel=BYW[+d.open].q;});}
   if(d.back)return go(function(){route.lesson=null;});
@@ -1071,6 +1149,9 @@ document.addEventListener("click",function(e){
   if(d.cskip){callRecStop(true);return;}
   if(d.chang){if(window.speechSynthesis)speechSynthesis.cancel();callFinish(true);return;}
   if(d.ccc){overlay.C.cc=!overlay.C.cc;render();return;}
+  if(d.cfr){overlay.C.fr=!overlay.C.fr;render();return;}
+  if(d.cgoal){overlay.C.goalOpen=!overlay.C.goalOpen;render();return;}
+  if(d.cmute){S.oral.callSkip=!S.oral.callSkip;save();render();return;}
   if(d.cplay!==undefined){var en=overlay.C.log[+d.cplay];if(en&&en.url){if(window.speechSynthesis)speechSynthesis.cancel();new Audio(en.url).play().catch(function(){});}return;}
   /* congress loop */
   if(d.loopmap)return go(function(){stopRaf();overlay=null;tab="games";inboxMap=false;loopMap=true;});
@@ -1100,7 +1181,10 @@ document.addEventListener("click",function(e){
     if(bm==="restore"){try{importCode($("#bin").value);backupMode=null;backupMsg="Progression restaurée ✓";buildDeck();}catch(e){backupMsg="Ce code n’est pas valide. Vérifie qu’il est complet et commence par SR1:.";}render();return;}
   }
   /* révision */
-  if(d.scope)return go(function(){R.scope=d.scope;buildDeck();});
+  if(d.rview&&!d.scope)return go(function(){R.view=d.rview;});
+  if(d.scope)return go(function(){R.scope=d.scope;if(d.rview)R.view=d.rview;buildDeck();});
+  if(d.lext!==undefined)return go(function(){R.lexT=+d.lext<0?null:+d.lext;window.scrollTo(0,0);});
+  if(d.deck)return go(function(){if(!S.decks)S.decks=[];var i=S.decks.indexOf(d.deck);if(i>-1)S.decks.splice(i,1);else S.decks.push(d.deck);save();});
   if(d.onlynew)return go(function(){R.onlyNew=!R.onlyNew;buildDeck();});
   if(d.flip){R.flipped=!R.flipped;render();return;}
   if(d.mark!==undefined){
