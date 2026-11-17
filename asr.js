@@ -13,16 +13,37 @@ window.SRJudge=(function(){
   },window.SR_ASR_CFG||{});
   var pipe=null,loading=null,T=null;
 
+  /* Chargement en plusieurs tentatives : si une configuration échoue sur l'appareil
+     (moteur WebAssembly, cache du navigateur…), on réessaie automatiquement avec la suivante. */
+  var lastErrors=[];
+  function attempt(n,onProgress){
+    var o=T.env.backends.onnx.wasm;
+    try{o.numThreads=1;o.proxy=false;}catch(e){}
+    if(cfg.localPath){T.env.allowLocalModels=true;T.env.allowRemoteModels=false;T.env.localModelPath=cfg.localPath;}
+    else{T.env.allowLocalModels=false;T.env.allowRemoteModels=true;}
+    if(n===0&&cfg.wasmPaths)o.wasmPaths=new URL(cfg.wasmPaths,document.baseURI).href;
+    else{try{delete o.wasmPaths;}catch(e){o.wasmPaths=undefined;}}
+    T.env.useBrowserCache=n<2;
+    if("useWasmCache" in T.env)T.env.useWasmCache=n<2;
+    return T.pipeline("automatic-speech-recognition",cfg.model,{dtype:"q8",device:"wasm",progress_callback:onProgress||null});
+  }
   function load(onProgress){
     if(pipe)return Promise.resolve(pipe);
     if(loading)return loading;
+    lastErrors=[];
     loading=import(new URL(cfg.lib,document.baseURI).href).then(function(mod){
       T=mod;
-      if(cfg.localPath){T.env.allowLocalModels=true;T.env.allowRemoteModels=false;T.env.localModelPath=cfg.localPath;}
-      else{T.env.allowLocalModels=false;}
-      if(cfg.wasmPaths)T.env.backends.onnx.wasm.wasmPaths=new URL(cfg.wasmPaths,document.baseURI).href;
-      return T.pipeline("automatic-speech-recognition",cfg.model,{dtype:"q8",device:"wasm",progress_callback:onProgress||null});
-    }).then(function(p){pipe=p;loading=null;return p;},function(e){loading=null;throw e;});
+      var tries=cfg.localPath?[0]:[0,1,2];
+      var run=function(k){
+        return attempt(tries[k],onProgress).catch(function(e){
+          lastErrors.push("essai "+(k+1)+" : "+((e&&e.message)||e));
+          try{console.warn("SRJudge",e);}catch(x){}
+          if(k+1<tries.length)return run(k+1);
+          throw new Error(lastErrors.join(" · "));
+        });
+      };
+      return run(0);
+    },function(e){throw new Error("bibliothèque introuvable ("+((e&&e.message)||e)+")");}).then(function(p){pipe=p;loading=null;return p;},function(e){loading=null;throw e;});
     return loading;
   }
 
