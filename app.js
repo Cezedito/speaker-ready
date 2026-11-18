@@ -525,7 +525,7 @@ function runJudge(){
 function judgeHTML(){
   var j=O.judge,m=O.mode;
   if(!window.SRJudge)return "";
-  if(!S.oral.asr)return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p>Active l’écoute automatique : l’appli transcrit ta voix et note ta prononciation, pour un avis neutre en plus du tien.</p><p class="tag" style="margin:0 0 12px">Premier usage : environ 70 Mo à télécharger une seule fois (en Wi-Fi de préférence). Ensuite tout se passe sur ton téléphone.</p><button class="btn primary" data-asron="1">Activer l’écoute automatique</button></div>';
+  if(!S.oral.asr)return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p>Active l’écoute automatique : l’appli transcrit ta voix et note ta prononciation, pour un avis neutre en plus du tien.</p><p class="tag" style="margin:0 0 12px">Premier usage : environ 70 Mo à télécharger une seule fois (en Wi-Fi de préférence). Ensuite tout se passe sur ton téléphone.</p><button class="btn primary" data-asron="1">Activer l’écoute automatique</button><button class="ohelp in" data-oralhelp="1">Besoin d’aide ?</button></div>';
   if(!j)return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><button class="btn" data-asrrun="1">Analyser mon enregistrement</button></div>';
   if(j.state==="load")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p id="asrs">Téléchargement du modèle d’écoute (une seule fois)… <b id="asrp">'+(j.pct||0)+' %</b></p><div class="spin"></div></div>';
   if(j.state==="run")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p id="asrs">J’écoute ta réponse…</p><div class="spin"></div></div>';
@@ -571,7 +571,7 @@ function renderOral(){
       '<div class="actions" style="margin-top:10px"><button class="btn" data-orestart="1">↺ Réessayer</button></div>';
   }
   view.innerHTML=chips+goal+(O.err?'<div class="note">'+esc(O.err)+'</div>':'')+
-    '<p class="qhint" style="margin:4px 4px 10px">'+desc+'</p><div class="card speak">'+prompt+(O.ohint&&O.phase==="prompt"?'<p class="muted" style="margin:10px 0 0">Commence par : <b>'+esc(it.en.split(" ").slice(0,3).join(" "))+'…</b></p>':'')+'</div>'+body;
+    '<p class="qhint" style="margin:4px 4px 10px">'+desc+'</p><div class="card speak">'+prompt+(O.ohint&&O.phase==="prompt"?'<p class="muted" style="margin:10px 0 0">Commence par : <b>'+esc(it.en.split(" ").slice(0,3).join(" "))+'…</b></p>':'')+'</div>'+body+'<button class="ohelp" data-oralhelp="1">🎙️ Micro et écoute automatique : comment les activer ?</button>';
   if(O.phase==="review"&&O.autoplay){O.autoplay=false;setTimeout(function(){speak(it.en,.95);},250);}
 }
 
@@ -973,6 +973,12 @@ var TIPS={
  memory:{t:"Paires",ic:"🃏",steps:[["🃏","Retourne deux cartes à la fois."],["🔗","Trouve chaque mot anglais et sa traduction française."],["🏆","Termine en un minimum de coups."]]},
  chrono:{t:"Vrai ou faux chrono",ic:"⏱️",steps:[["👀","Un mot anglais et une traduction s’affichent."],["✅","Réponds Vrai ou Faux le plus vite possible."],["⏱️","Tu as 60 secondes pour marquer un max de points."]]},
  scramble:{t:"Phrase en désordre",ic:"🧩",steps:[["🧩","Les mots d’une phrase sont mélangés."],["👆","Touche-les dans le bon ordre pour reconstruire la phrase."],["✅","Vérifie, puis passe à la suivante."]]},
+ oral:{t:"Activer l’écoute",ic:"🎙️",lab:"Comment ça marche",go:"Compris !",steps:[
+   ["🎙️","<b>Autorise le micro.</b> Au premier enregistrement, l’iPhone demande l’accès au micro : touche « Autoriser »."],
+   ["⚙️","<b>Si tu as refusé :</b> ouvre Réglages › Safari › Micro et choisis « Autoriser » ou « Demander ». Depuis Safari, tu peux aussi passer par « aA » › Réglages du site web › Micro. Puis ferme et rouvre l’appli."],
+   ["🤖","<b>Active l’écoute automatique.</b> Après ton premier enregistrement, touche « Activer l’écoute automatique ». L’appli télécharge environ 70 Mo une seule fois : reste en Wi-Fi et garde l’appli ouverte jusqu’à 100 %."],
+   ["✅","<b>Fais-toi noter.</b> Touche ensuite « Analyser mon enregistrement » : l’appli écrit ce qu’elle a compris et te donne une note sur 100. Tout se passe sur ton téléphone."],
+   ["💡","<b>Pour un bon score :</b> parle à 15 cm du téléphone, dans un endroit calme, à un rythme naturel."]]},
  dictee:{t:"Dictée",ic:"✍️",steps:[["🔊","Écoute le mot (tu peux le réécouter, même lentement)."],["⌨️","Écris-le en anglais."],["✅","Valide pour voir si c’est juste."]]}
 };
 function tipFor(d){
@@ -980,14 +986,15 @@ function tipFor(d){
   if(d.inboxplay||d.sgame==="inbox")return "inbox";
   if(d.callplay!==undefined)return "call";
   if(d.game&&TIPS[d.game])return d.game;
+  if(d.tab==="oral"&&tab!=="oral")return "oral";
   return null;
 }
 function showTip(id,el){
   var T=TIPS[id],m=document.createElement("div");m.className="tipm";
-  m.innerHTML='<div class="tipc" role="dialog" aria-modal="true"><div class="tiph"><span class="tipi">'+T.ic+'</span><div><span class="tag">Comment jouer</span><b>'+T.t+'</b></div></div>'+
+  m.innerHTML='<div class="tipc" role="dialog" aria-modal="true"><div class="tiph"><span class="tipi">'+T.ic+'</span><div><span class="tag">'+(T.lab||"Comment jouer")+'</span><b>'+T.t+'</b></div></div>'+
     '<ol class="tips">'+T.steps.map(function(x){return '<li><span>'+x[0]+'</span><p>'+x[1]+'</p></li>';}).join("")+'</ol>'+
     '<label class="tipchk"><input type="checkbox" id="tipno"><span>J’ai compris, ne plus afficher</span></label>'+
-    '<div class="row2"><button class="btn" data-tipclose="0">Annuler</button><button class="btn primary" data-tipclose="1">C’est parti !</button></div></div>';
+    '<div class="row2"><button class="btn" data-tipclose="0">Annuler</button><button class="btn primary" data-tipclose="1">'+(T.go||"C’est parti !")+'</button></div></div>';
   document.body.appendChild(m);
   m.addEventListener("click",function(e){
     var b=e.target.closest("[data-tipclose]");if(!b&&e.target!==m)return;
@@ -995,7 +1002,7 @@ function showTip(id,el){
     var go1=b&&b.getAttribute("data-tipclose")==="1";
     if(m.querySelector("#tipno").checked){S.tips[id]=1;save();}
     TIPS_SEEN[id]=1;m.classList.add("out");setTimeout(function(){m.remove();},200);
-    if(go1)el.click();
+    if(go1&&el)el.click();
   });
 }
 /* ===================== LE COUP DE FIL ===================== */
@@ -1300,6 +1307,7 @@ document.addEventListener("click",function(e){
   var el=e.target.closest("button");if(!el||el.disabled)return;var d=el.dataset;
   if(el.form&&el.type==="submit")return;
   var tipId=tipFor(d);if(tipId&&!S.tips[tipId]&&!TIPS_SEEN[tipId]){showTip(tipId,el);return;}
+  if(d.oralhelp){showTip("oral",null);return;}
   if(d.tipsreset)return go(function(){S.tips={};TIPS_SEEN={};save();backupMsg="Les explications des jeux s’afficheront de nouveau.";});
   if(d.settings!==undefined)return go(function(){settingsOpen=d.settings==="1";});
   if(d.tab)return go(function(){settingsOpen=false;stopTimer();stopRaf();callClose();overlay=null;loopMap=false;inboxMap=false;callsMap=false;if(d.tab!=="oral")stopStream();tab=d.tab;if(tab==="lessons")route.lesson=null;if(tab==="review")buildDeck();});
