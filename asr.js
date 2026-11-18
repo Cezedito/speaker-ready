@@ -11,31 +11,78 @@ window.SRJudge=(function(){
     localPath:null,                       // tests : dossier local des modèles
     wasmPaths:"ortwasm/"                  // moteur ONNX (WebAssembly) servi depuis le dépôt
   },window.SR_ASR_CFG||{});
-  var pipe=null,loading=null,T=null;
+  var pipe=null,loading=null,T=null,listeners=[];
 
-  /* Chargement en plusieurs tentatives : si une configuration échoue sur l'appareil
-     (moteur WebAssembly, cache du navigateur…), on réessaie automatiquement avec la suivante. */
+  /* Stockage durable du modèle sur le téléphone (IndexedDB) : il survit à la fermeture
+     ou au rechargement de l'appli, contrairement au cache classique que l'iPhone vide parfois. */
+  var DBN="sr-whisper",ST="files",dbp=null;
+  function db(){
+    if(dbp)return dbp;
+    dbp=new Promise(function(res,rej){
+      try{var r=indexedDB.open(DBN,1);r.onupgradeneeded=function(){r.result.createObjectStore(ST);};r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};}catch(e){rej(e);}
+    });
+    return dbp;
+  }
+  function keyOf(req){return typeof req==="string"?req:(req&&req.url)||String(req);}
+  var idbCache={
+    match:function(req){
+      var k=keyOf(req);
+      return idbGet(k).then(function(r){
+        if(r||typeof caches==="undefined")return r;
+        /* ancien cache du navigateur : on récupère le fichier et on le range au bon endroit */
+        return caches.open("transformers-cache").then(function(c){return c.match(k);}).then(function(old){
+          if(!old)return undefined;return idbCache.put(k,old.clone()).then(function(){return old;});
+        }).catch(function(){return undefined;});
+      });
+    },
+    get0:function(req){
+      var k=keyOf(req);
+      return db().then(function(d){return new Promise(function(res){
+        var t=d.transaction(ST,"readonly").objectStore(ST).get(k);
+        t.onsuccess=function(){var v=t.result;if(!v)return res(undefined);res(new Response(v.blob,{status:200,headers:{"content-type":v.type||"application/octet-stream","content-length":String(v.blob.size)}}));};
+        t.onerror=function(){res(undefined);};
+      });}).catch(function(){return undefined;});
+    },
+    put:function(req,resp){
+      var k=keyOf(req);
+      return resp.blob().then(function(blob){return db().then(function(d){return new Promise(function(res){
+        var tx=d.transaction(ST,"readwrite");tx.objectStore(ST).put({blob:blob,type:resp.headers&&resp.headers.get("content-type")},k);
+        tx.oncomplete=function(){res();};tx.onerror=function(){res();};tx.onabort=function(){res();};
+      });});}).catch(function(){});
+    }
+  };
+  function idbGet(k){return idbCache.get0(k);}
+  function cachedCount(){
+    return db().then(function(d){return new Promise(function(res){var t=d.transaction(ST,"readonly").objectStore(ST).count();t.onsuccess=function(){res(t.result||0);};t.onerror=function(){res(0);};});}).catch(function(){return 0;});
+  }
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
+
+  /* Chargement en plusieurs tentatives ; la configuration qui a marché est retenue pour la fois suivante. */
   var lastErrors=[];
-  function attempt(n,onProgress){
+  function attempt(n){
     var o=T.env.backends.onnx.wasm;
     try{o.numThreads=1;o.proxy=false;}catch(e){}
     if(cfg.localPath){T.env.allowLocalModels=true;T.env.allowRemoteModels=false;T.env.localModelPath=cfg.localPath;}
     else{T.env.allowLocalModels=false;T.env.allowRemoteModels=true;}
     if(n===0&&cfg.wasmPaths)o.wasmPaths=new URL(cfg.wasmPaths,document.baseURI).href;
     else{try{delete o.wasmPaths;}catch(e){o.wasmPaths=undefined;}}
-    T.env.useBrowserCache=n<2;
+    var useIdb=n<2&&typeof indexedDB!=="undefined";
+    T.env.useCustomCache=useIdb;T.env.customCache=useIdb?idbCache:null;
+    T.env.useBrowserCache=!useIdb&&n<2;
     if("useWasmCache" in T.env)T.env.useWasmCache=n<2;
-    return T.pipeline("automatic-speech-recognition",cfg.model,{dtype:"q8",device:"wasm",progress_callback:onProgress||null});
+    return T.pipeline("automatic-speech-recognition",cfg.model,{dtype:"q8",device:"wasm",progress_callback:function(e){listeners.forEach(function(f){try{f(e);}catch(x){}});}});
   }
   function load(onProgress){
+    if(onProgress&&listeners.indexOf(onProgress)<0)listeners.push(onProgress);
     if(pipe)return Promise.resolve(pipe);
     if(loading)return loading;
     lastErrors=[];
+    var pref=0;try{pref=+localStorage.getItem("sr-asr-mode")||0;}catch(e){}
     loading=import(new URL(cfg.lib,document.baseURI).href).then(function(mod){
       T=mod;
-      var tries=cfg.localPath?[0]:[0,1,2];
+      var tries=cfg.localPath?[0]:[pref].concat([0,1,2].filter(function(x){return x!==pref;}));
       var run=function(k){
-        return attempt(tries[k],onProgress).catch(function(e){
+        return attempt(tries[k]).then(function(p){try{localStorage.setItem("sr-asr-mode",String(tries[k]));}catch(e){}return p;},function(e){
           lastErrors.push("essai "+(k+1)+" : "+((e&&e.message)||e));
           try{console.warn("SRJudge",e);}catch(x){}
           if(k+1<tries.length)return run(k+1);
@@ -43,9 +90,11 @@ window.SRJudge=(function(){
         });
       };
       return run(0);
-    },function(e){throw new Error("bibliothèque introuvable ("+((e&&e.message)||e)+")");}).then(function(p){pipe=p;loading=null;return p;},function(e){loading=null;throw e;});
+    },function(e){throw new Error("bibliothèque introuvable ("+((e&&e.message)||e)+")");}).then(function(p){pipe=p;loading=null;listeners=[];return p;},function(e){loading=null;listeners=[];throw e;});
     return loading;
   }
+  /* préchargement silencieux, pour que l'écoute soit prête quand elle en a besoin */
+  function warm(){if(pipe||loading)return;load().catch(function(){});}
 
   /* enregistrement (mp4/webm) → échantillons mono 16 kHz */
   function toPCM(blob){
@@ -98,5 +147,5 @@ window.SRJudge=(function(){
     return {score:score,tw:t.map(function(w,i){return {w:w,ok:r.hit[i]};}),verdict:v,grade:score>=85?2:score>=55?1:0};
   }
 
-  return {load:load,transcribe:transcribe,judge:judge,ready:function(){return !!pipe;},model:cfg.model};
+  return {load:load,warm:warm,cached:cachedCount,loading:function(){return !!loading;},transcribe:transcribe,judge:judge,ready:function(){return !!pipe;},model:cfg.model};
 })();

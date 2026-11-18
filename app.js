@@ -515,9 +515,10 @@ function runJudge(){
   if(!window.SRJudge||!O.blob)return;
   var it=O.item,files={};
   O.judge={state:SRJudge.ready()?"run":"load",pct:0};render();
+  if(!SRJudge.ready()&&SRJudge.cached)SRJudge.cached().then(function(n){if(O.judge&&O.judge.state==="load"&&n>=3){O.judge.cached=true;var el=$("#asrs");if(el)el.innerHTML="Préparation de l’écoute… <b id=\"asrp\"></b>";}});
   SRJudge.transcribe(O.blob,function(e){
     if(!e)return;
-    if(e.status==="progress"&&e.total){files[e.file]=[e.loaded,e.total];var L=0,T=0;for(var f in files){L+=files[f][0];T+=files[f][1];}O.judge.pct=Math.round(L/T*100);var el=$("#asrp");if(el)el.textContent=O.judge.pct+" %";}
+    if(e.status==="progress"&&e.total&&!(O.judge&&O.judge.cached)){files[e.file]=[e.loaded,e.total];var L=0,T=0;for(var f in files){L+=files[f][0];T+=files[f][1];}O.judge.pct=Math.round(L/T*100);var el=$("#asrp");if(el)el.textContent=O.judge.pct+" %";}
     if(e.status==="ready"){O.judge.state="run";var el2=$("#asrs");if(el2)el2.textContent="J’écoute ta réponse…";}
   }).then(function(txt){if(O.item!==it||!O.judge)return;O.judge={state:"done",heard:txt,res:SRJudge.judge(it.en,txt)};render();},
     function(e){if(O.item!==it)return;O.judge={state:"err",msg:String((e&&e.message)||e)};render();});
@@ -527,7 +528,7 @@ function judgeHTML(){
   if(!window.SRJudge)return "";
   if(!S.oral.asr)return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p>Active l’écoute automatique : l’appli transcrit ta voix et note ta prononciation, pour un avis neutre en plus du tien.</p><p class="tag" style="margin:0 0 12px">Premier usage : environ 70 Mo à télécharger une seule fois (en Wi-Fi de préférence). Ensuite tout se passe sur ton téléphone.</p><button class="btn primary" data-asron="1">Activer l’écoute automatique</button><button class="ohelp in" data-oralhelp="1">Besoin d’aide ?</button></div>';
   if(!j)return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><button class="btn" data-asrrun="1">Analyser mon enregistrement</button></div>';
-  if(j.state==="load")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p id="asrs">Téléchargement du modèle d’écoute (une seule fois)… <b id="asrp">'+(j.pct||0)+' %</b></p><div class="spin"></div></div>';
+  if(j.state==="load")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p id="asrs">'+(j.cached?'Préparation de l’écoute… <b id="asrp"></b>':'Téléchargement du modèle d’écoute (une seule fois)… <b id="asrp">'+(j.pct||0)+' %</b>')+'</p><div class="spin"></div></div>';
   if(j.state==="run")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p id="asrs">J’écoute ta réponse…</p><div class="spin"></div></div>';
   if(j.state==="err")return '<div class="card ojudge"><span class="lab">🤖 Avis de l’appli</span><p>L’analyse n’a pas pu se faire. Vérifie ta connexion pour le premier téléchargement, puis réessaie.</p><p class="tag" style="margin:0 0 10px">'+esc(j.msg)+'</p><button class="btn" data-asrrun="1">Réessayer</button></div>';
   var r=j.res,col=r.score>=85?"good":r.score>=55?"warn":"bad";
@@ -545,6 +546,7 @@ function oralGrade(g){
   S.oral.srs[key]=c;oralToday();S.oral.n=(S.oral.n||0)+1;markToday();save();nextOral();
 }
 function renderOral(){
+  if(S.oral.asr&&window.SRJudge&&SRJudge.warm)setTimeout(function(){SRJudge.warm();},600);
   if(!O.item)nextOral();
   var it=O.item,m=O.mode,n=oralToday(),pct=Math.min(100,Math.round(n/ORAL_GOAL*100)),desc=ORAL_MODES.filter(function(x){return x[0]===m;})[0][2];
   var chips='<div class="chips">'+ORAL_MODES.map(function(x){return '<button class="chip'+(x[0]===m?" on":"")+'" data-omode="'+x[0]+'">'+x[1]+'</button>';}).join("")+'</div>';
@@ -1024,6 +1026,7 @@ function speakThen(text,cb,rate,voice){
   setTimeout(fin,est+2500);
 }
 function startCall(k){
+  if(S.oral.asr&&window.SRJudge&&SRJudge.warm)SRJudge.warm();
   callClose();var sc=callList()[k];
   overlay={type:"call",C:{k:k,sc:sc,phase:"ring",t:0,sat:50,log:[],cc:sc.lv<3,timeouts:0,start:0,speaking:false}};
   ringTimer=setInterval(function(){tone([440,480],.35,"sine",.06,.0);setTimeout(function(){tone([440,480],.35,"sine",.06,0);},450);},2200);
