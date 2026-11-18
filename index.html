@@ -719,19 +719,25 @@ header.top{position:relative}
   <main id="view" aria-live="polite"></main>
 </div>
 <nav class="tabs" aria-label="Navigation principale"><div class="in" id="tabs"></div></nav>
-<script src="lessons-q1.js"></script>
-<script src="lessons-q2.js"></script>
-<script src="lessons-q3.js"></script>
-<script src="lessons-q4.js"></script>
-<script src="lessons-marketing.js"></script>
-<script src="lessons-quotidien.js"></script>
-<script src="vocab-bank.js"></script>
-<script src="phaser.min.js"></script>
-<script src="loop-phaser.js"></script>
-<script src="inbox-data.js"></script>
-<script src="inbox-ui.js"></script>
-<script src="calls-data.js"></script>
-<script src="asr.js"></script>
-<script src="app.js"></script>
+<script>window.SR_BUILD="20261118145533";
+/* mise à jour automatique : si une nouvelle version est en ligne, on rafraîchit les fichiers puis on recharge */
+(function(){try{fetch("version.txt?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():"";}).then(function(v){v=(v||"").trim();
+if(!v||v===window.SR_BUILD||sessionStorage.getItem("sr-upd")===v)return;sessionStorage.setItem("sr-upd",v);
+Promise.all(["./","index.html","version.txt"].map(function(f){return fetch(f,{cache:"reload"}).catch(function(){});})).then(function(){location.reload();});
+}).catch(function(){});}catch(e){}})();</script>
+<script src="lessons-q1.js?v=20261118145533"></script>
+<script src="lessons-q2.js?v=20261118145533"></script>
+<script src="lessons-q3.js?v=20261118145533"></script>
+<script src="lessons-q4.js?v=20261118145533"></script>
+<script src="lessons-marketing.js?v=20261118145533"></script>
+<script src="lessons-quotidien.js?v=20261118145533"></script>
+<script src="vocab-bank.js?v=20261118145533"></script>
+<script src="phaser.min.js?v=20261118145533"></script>
+<script src="loop-phaser.js?v=20261118145533"></script>
+<script src="inbox-data.js?v=20261118145533"></script>
+<script src="inbox-ui.js?v=20261118145533"></script>
+<script src="calls-data.js?v=20261118145533"></script>
+<script src="asr.js?v=20261118145533"></script>
+<script src="app.js?v=20261118145533"></script>
 </body>
 </html>
