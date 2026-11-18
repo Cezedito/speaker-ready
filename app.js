@@ -70,8 +70,8 @@ var SVG={
 
 /* ===================== ÉTAT ===================== */
 var KEY="congress-english:v3";
-var S={decks:[],known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{},calls:{},profile:{name:NAME}};
-try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in S){if(o[k]!==undefined)S[k]=o[k];}}}}catch(e){}
+var S={oral:{},tips:{},decks:[],known:{},done:{},best:null,days:[],start:today(),games:{},loop:{},inbox:{},srs:{},sess:{},calls:{},profile:{name:NAME}};
+try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==="object"){for(var k in o){if(o[k]!==undefined&&o[k]!==null)S[k]=o[k];}}}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 save();
 function markToday(){var t=today();if(S.days.indexOf(t)<0){S.days.push(t);save();}}
@@ -490,7 +490,7 @@ function nextOral(){
 function stopStream(){if(O.rec&&O.rec.state==="recording"){try{O.rec.stop();}catch(e){}}if(O.stream){O.stream.getTracks().forEach(function(t){t.stop();});O.stream=null;}clearInterval(O.tick);}
 function micError(e){
   var n=(e&&e.name)||"";
-  if(n==="NotAllowedError"||n==="SecurityError")return "L’accès au micro a été refusé. Sur iPhone : Réglages › Safari › Micro, choisis « Demander » ou « Autoriser », puis réessaie.";
+  if(n==="NotAllowedError"||n==="SecurityError")return "L’accès au micro a été refusé. Sur iPhone : Réglages › Apps › Safari › Micro (ou Réglages › Safari › Micro), choisis « Autoriser », puis ferme et rouvre l’appli.";
   if(n==="NotFoundError")return "Aucun micro détecté sur cet appareil.";
   return "Impossible de démarrer le micro ("+(n||"erreur")+"). Ferme puis rouvre l’appli et réessaie.";
 }
@@ -977,7 +977,7 @@ var TIPS={
  scramble:{t:"Phrase en désordre",ic:"🧩",steps:[["🧩","Les mots d’une phrase sont mélangés."],["👆","Touche-les dans le bon ordre pour reconstruire la phrase."],["✅","Vérifie, puis passe à la suivante."]]},
  oral:{t:"Activer l’écoute",ic:"🎙️",lab:"Comment ça marche",go:"Compris !",steps:[
    ["🎙️","<b>Autorise le micro.</b> Au premier enregistrement, l’iPhone demande l’accès au micro : touche « Autoriser »."],
-   ["⚙️","<b>Si tu as refusé :</b> ouvre Réglages › Safari › Micro et choisis « Autoriser » ou « Demander ». Depuis Safari, tu peux aussi passer par « aA » › Réglages du site web › Micro. Puis ferme et rouvre l’appli."],
+   ["⚙️","<b>Pour ne plus avoir la question à chaque ouverture :</b> ouvre Réglages › Apps › Safari › Micro (ou Réglages › Safari › Micro sur un iPhone plus ancien) et choisis « Autoriser ». Si tu avais refusé, c’est aussi là que ça se règle. Depuis Safari, tu peux aussi passer par « aA » › Réglages du site web › Micro. Puis ferme et rouvre l’appli."],
    ["🤖","<b>Active l’écoute automatique.</b> Après ton premier enregistrement, touche « Activer l’écoute automatique ». L’appli télécharge environ 70 Mo une seule fois : reste en Wi-Fi et garde l’appli ouverte jusqu’à 100 %."],
    ["✅","<b>Fais-toi noter.</b> Touche ensuite « Analyser mon enregistrement » : l’appli écrit ce qu’elle a compris et te donne une note sur 100. Tout se passe sur ton téléphone."],
    ["💡","<b>Pour un bon score :</b> parle à 15 cm du téléphone, dans un endroit calme, à un rythme naturel."]]},
