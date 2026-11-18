@@ -1273,8 +1273,8 @@ document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay
       if(done)return;done=true;
       if(!ok){restore(nav);render();view.classList.remove("v-fade","v-up");window.scrollTo(0,y);}
       app.style.transition="";app.style.transform="";app.style.willChange="";
-      top.style.transition="opacity .15s";top.style.opacity=0;
-      setTimeout(function(){if(top.parentNode)top.remove();if(dim.parentNode)dim.remove();busy=false;},150);
+      busy=false;top.style.transition="opacity .12s";top.style.opacity=0;dim.style.opacity=0;
+      setTimeout(function(){if(top.parentNode)top.remove();if(dim.parentNode)dim.remove();},130);
     }
     top.addEventListener("transitionend",function(e){if(e.target===top&&e.propertyName==="transform")clean();});
     setTimeout(clean,dur+80);
