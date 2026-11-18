@@ -1224,7 +1224,7 @@ document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay
 
 /* geste « retour » façon iPhone : la page suit le doigt et découvre la page précédente en dessous */
 (function(){
-  var st=null,busy=false;
+  var st=null,busy=false,raf=0,pend=null;
   function target(){
     if(busy)return null;
     if(overlay||document.getElementById("loopstage")||document.getElementById("ibroot")||document.getElementById("callroot"))return null;
@@ -1239,49 +1239,60 @@ document.addEventListener("input",function(e){if(e.target.id==="dinput"&&overlay
   function begin(){
     var y=window.scrollY,top=document.createElement("div");top.className="swtop";
     var cl=app.cloneNode(true);cl.removeAttribute("id");cl.removeAttribute("style");cl.querySelectorAll("[id]").forEach(function(e){e.removeAttribute("id");});
-    cl.style.marginTop=(-y)+"px";top.appendChild(cl);top.style.background=getComputedStyle(document.documentElement).background;
+    cl.style.transform="translate3d(0,"+(-y)+"px,0)";top.appendChild(cl);top.style.background=getComputedStyle(document.documentElement).backgroundColor||"#F9F8F6";
     var dim=document.createElement("div");dim.className="swdim";
     document.body.appendChild(dim);document.body.appendChild(top);
     st.top=top;st.dim=dim;st.y=y;st.nav=navState();
     st.t.click();
     view.classList.remove("v-fade","v-up");
-    app.style.transition="none";app.style.transform="translateX(-30%)";app.style.opacity=".35";
+    app.style.transition="none";app.style.willChange="transform";app.style.transform="translate3d(-30%,0,0)";
+  }
+  function paint(){
+    raf=0;if(!pend)return;var p=pend;pend=null;var w=W();
+    p.top.style.transform="translate3d("+(p.p*w)+"px,0,0)";
+    app.style.transform="translate3d("+(-30*(1-p.p))+"%,0,0)";
+    p.dim.style.opacity=(1-p.p)*.22;
   }
   function set(dx){
-    var w=W(),p=Math.max(0,Math.min(1,dx/w));
-    st.top.style.transform="translateX("+(p*w)+"px)";st.top.style.opacity=1-p*.55;
-    app.style.transform="translateX("+(-30*(1-p))+"%)";app.style.opacity=.35+.65*p;
-    st.dim.style.opacity=(1-p)*.12;
+    pend={top:st.top,dim:st.dim,p:Math.max(0,Math.min(1,dx/W()))};
+    if(!raf)raf=requestAnimationFrame(paint);
   }
-  function finish(ok){
-    var w=W(),T="transform .42s cubic-bezier(.22,.8,.3,1),opacity .42s ease",top=st.top,dim=st.dim,nav=st.nav,y=st.y;
+  function finish(ok,v){
+    if(raf){cancelAnimationFrame(raf);raf=0;}paint();
+    var w=W(),top=st.top,dim=st.dim,nav=st.nav,y=st.y,cur=Math.max(0,Math.min(1,st.dx/w));
     st=null;busy=true;
-    top.style.transition=T;app.style.transition=T;dim.style.transition="opacity .42s";
-    void top.offsetWidth;void app.offsetWidth;
-    if(ok){top.style.transform="translateX("+w*.6+"px)";top.style.opacity=0;app.style.transform="translateX(0)";app.style.opacity=1;dim.style.opacity=0;}
-    else{top.style.transform="translateX(0)";top.style.opacity=1;app.style.transform="translateX(-30%)";app.style.opacity=.35;dim.style.opacity=.12;}
+    var dist=ok?(1-cur)*w:cur*w,sp=Math.max(.6,Math.min(3,Math.abs(v||0)));
+    var dur=Math.round(Math.max(160,Math.min(380,dist/sp*1.6)));
+    var T="transform "+dur+"ms cubic-bezier(.25,.9,.35,1)",TO="opacity "+dur+"ms ease-out";
+    top.style.transition=T+","+TO;app.style.transition=T;dim.style.transition=TO;
+    void top.offsetWidth;
+    if(ok){top.style.transform="translate3d("+w+"px,0,0)";app.style.transform="translate3d(0,0,0)";dim.style.opacity=0;}
+    else{top.style.transform="translate3d(0,0,0)";app.style.transform="translate3d(-30%,0,0)";dim.style.opacity=.22;}
     var done=false;
     function clean(){
       if(done)return;done=true;
       if(!ok){restore(nav);render();view.classList.remove("v-fade","v-up");window.scrollTo(0,y);}
-      app.style.transition="";app.style.transform="";app.style.opacity="";
-      if(top.parentNode)top.remove();if(dim.parentNode)dim.remove();busy=false;
+      app.style.transition="";app.style.transform="";app.style.willChange="";
+      top.style.transition="opacity .15s";top.style.opacity=0;
+      setTimeout(function(){if(top.parentNode)top.remove();if(dim.parentNode)dim.remove();busy=false;},150);
     }
-    top.addEventListener("transitionend",function(e){if(e.propertyName==="transform")clean();});
-    setTimeout(clean,480);
+    top.addEventListener("transitionend",function(e){if(e.target===top&&e.propertyName==="transform")clean();});
+    setTimeout(clean,dur+80);
   }
   document.addEventListener("touchstart",function(e){
     var t=e.touches[0];if(busy||(st&&st.started))return;st=null;if(e.touches.length>1||t.clientX>24)return;
-    var tg=target();if(!tg)return;st={t:tg,x:t.clientX,y0:t.clientY,dx:0,lt:Date.now(),lx:t.clientX,v:0,started:false};
+    var tg=target();if(!tg)return;st={t:tg,x:t.clientX,y0:t.clientY,dx:0,hist:[[Date.now(),t.clientX]],started:false};
   },{passive:true});
   document.addEventListener("touchmove",function(e){
     if(!st)return;var t=e.touches[0],dx=t.clientX-st.x,dy=Math.abs(t.clientY-st.y0);
-    if(!st.started){if(dy>12&&dy>dx){st=null;return;}if(dx<10)return;st.started=true;begin();}
-    var now=Date.now();st.v=(t.clientX-st.lx)/Math.max(1,now-st.lt);st.lx=t.clientX;st.lt=now;st.dx=dx;set(dx);
+    if(!st.started){if(dy>12&&dy>dx){st=null;return;}if(dx<8)return;st.started=true;begin();}
+    var now=Date.now();st.hist.push([now,t.clientX]);while(st.hist.length>2&&now-st.hist[0][0]>100)st.hist.shift();
+    st.dx=dx;set(dx);
   },{passive:true});
-  function end(){if(!st)return;if(!st.started){st=null;return;}finish(st.dx>W()*.35||st.v>.45);}
+  function vel(){var h=st.hist,a=h[0],b=h[h.length-1];return (b[1]-a[1])/Math.max(16,b[0]-a[0]);}
+  function end(){if(!st)return;if(!st.started){st=null;return;}var v=vel();finish(st.dx>W()*.4||v>.35,v);}
   document.addEventListener("touchend",end,{passive:true});
-  document.addEventListener("touchcancel",function(){if(st&&st.started)finish(false);else st=null;},{passive:true});
+  document.addEventListener("touchcancel",function(){if(st&&st.started)finish(false,0);else st=null;},{passive:true});
 })();
 /* pas de zoom (pincement ou double tap) */
 document.addEventListener("gesturestart",function(e){e.preventDefault();},{passive:false});
