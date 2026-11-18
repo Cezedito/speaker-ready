@@ -60,6 +60,7 @@ function mount(root,G,api){
    '<div class="ibcd" id="ibcd"></div>';
 
   var $=function(s){return root.querySelector(s);};
+  if(window.ResizeObserver){["t","w"].forEach(function(a){var th=root.querySelector("#thr-"+a);if(!th)return;var ro=new ResizeObserver(function(){th.scrollTop=th.scrollHeight;});ro.observe(th);});}
   function hearts(){$("#ibh").innerHTML=[0,1,2].map(function(k){return '<span class="'+(k<lives?"on":"")+'">♥</span>';}).join("");}
   function hud(){
     $("#ibscore").textContent=G.score;$("#ibcombo").textContent=combo>=2?"×"+combo:"";
@@ -75,6 +76,8 @@ function mount(root,G,api){
     compose(a);scrollEnd(a,true);hud();
     if(api.tone)api.tone([520],.04,"sine",.05);
   }
+  /* garde toujours le dernier message visible au-dessus de la zone de réponse */
+  function pin(a){var th=$("#thr-"+a);if(!th)return;th.scrollTop=th.scrollHeight;requestAnimationFrame(function(){th.scrollTop=th.scrollHeight;setTimeout(function(){th.scrollTop=th.scrollHeight;},320);});}
   function scrollEnd(a,instant){var th=$("#thr-"+a);if(!th)return;if(instant)th.scrollTop=th.scrollHeight;else th.scrollTo({top:th.scrollHeight,behavior:"smooth"});}
 
   /* ---------- bulles ---------- */
@@ -113,7 +116,7 @@ function mount(root,G,api){
     var bar=a==="w"
       ?'<div class="wbar"><span class="wpl">'+I.plus+'</span><div class="win" id="win-'+a+'"><span class="ph">Message</span><span class="wst">'+I.sticker+'</span></div><span class="wpl">'+I.cam+'</span><span class="wpl">'+I.mic+'</span></div>'
       :'<div class="tmsbar"><span class="tpl">'+I.plus+'</span><div class="tin" id="win-'+a+'"><span class="ph">Type a message</span></div><span class="tsend">'+I.send+'</span></div>';
-    if(!it){box.innerHTML=bar;box.classList.remove("open");return;}
+    if(!it){box.innerHTML=bar;box.classList.remove("open");pin(a);return;}
     var m=it.m;
     if(!it.opts)it.opts=shuffle([m[4],m[5],m[6]]);
     box.innerHTML=
@@ -121,7 +124,7 @@ function mount(root,G,api){
         ?'<div class="wrep"><div class="wq" style="border-color:'+hcol(m[1],WA_COLS)+'"><b style="color:'+hcol(m[1],WA_COLS)+'">'+esc(short(m[1]))+'</b><span>'+esc(m[2])+'</span></div><span class="rx">Répondre</span></div>'
         :'<div class="trep"><div class="tq"><b>Réponse à '+esc(m[1])+'</b><span>'+esc(m[2])+'</span></div></div>')+
       '<div class="sugg">'+it.opts.map(function(o,j){return '<button class="sg" data-ibpick="'+j+'">'+esc(o)+'</button>';}).join("")+'</div>'+bar;
-    box.classList.add("open");
+    box.classList.add("open");pin(a);
   }
   function pick(a,j){
     if(busy||ended)return;var it=A[a].pend[0];if(!it)return;var txt=it.opts[j],ok=txt===it.m[4];busy=true;
